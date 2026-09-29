@@ -1,0 +1,20 @@
+# sensor_demo YAML config. Command-line options override this file.
+camera:
+  width: 1280
+  height: 1088
+  fps: 30
+  rotate: 0
+rtsp:
+  bps: 4000
+  codec: h264
+  url: /live/PRR
+imu:
+  sample_rate_hz: 1000
+  print_rate_hz: 10
+  print_metrics: false
+  # udp_dest: 192.168.1.100:5600  # Optional; disabled by default.
+save_data:
+  save: false
+  format: mp4
+  save_path: /root/demo/save_mp4/
+  skip: false

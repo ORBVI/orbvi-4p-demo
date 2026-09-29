@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ "$#" -eq 1 ] && [ "$1" = "--version" ]; then
+    exec "$root/bin/cam_demo" --version
+fi
+case " $* " in
+  *" --camera-id "*) exec "$root/bin/cam_demo" "$@" ;;
+esac
+exec "$root/bin/cam_group" "$@"

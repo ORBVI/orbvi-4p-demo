@@ -1,0 +1,9 @@
+.build/
+dist/
+capture*/
+*.raw
+*.log
+# The customer build inputs under build_deps are tracked; local wrappers stay local.
+
+# Local verification/cache files (not part of the customer build).
+/.customer-build/
