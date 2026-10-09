@@ -1,4 +1,6 @@
 #!/bin/sh
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# BSP runtime libraries and sensor plugins must also be visible to child processes.
+export LD_LIBRARY_PATH="/usr/hobot/lib:/usr/hobot/lib/sensor${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 exec "$root/bin/sensor_demo" "$@"
