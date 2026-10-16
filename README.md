@@ -14,6 +14,12 @@
 
 编译、部署、板内演示及与 SDK / ROS 2 的配合使用，请按 [ORBVI 4P 使用指南](https://huanshizhineng.feishu.cn/wiki/GoeUwlTiRiaY5skses2crmPFnCg?fromScene=spaceOverview) 操作。
 
+## 硬件资料
+
+网口板（4PET A01）是 ORBVI 4P 的以太网接口扩展板，将板卡的以太网信号引出为 RJ45 网口，方便通过网线连接电脑或交换机。
+
+- [网口板原理图（4PET A01，PDF）](hardware/02-4PET-HWA01-20260827-SCH.pdf)
+
 ## 源码目录
 
 - [`apps/`](apps/)：板端示例程序。
