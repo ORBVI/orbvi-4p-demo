@@ -22,6 +22,12 @@ int main(int argc,char **argv) {
         run({"sync","/bin/true"},2);
     }
     unsetenv("ORBVI_SYNC_SECONDS");
+    run({"trigger","/bin/true"},2);
+    run({"trigger","/bin/true","--fps","40"},2);
+    run({"trigger","/bin/true","--fps","60","--vts","1280"},2);
+    run({"trigger","/bin/true","--fps","60","--seconds","0"},2);
+    run({"trigger","/bin/true","--fps","60","--seconds","1","--seconds","2"},2);
+    run({"trigger","/bin/true","--fps","60","--vts"},2);
     // Never launch a real board workflow during host checks, even on an ARM host.
     run({"board",(root/"missing-runner").string()},1);
     fs::remove_all(root);

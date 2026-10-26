@@ -10,15 +10,20 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cerrno>
 #include <csignal>
 #include <cstdio>
+#include <ctime>
 #include <deque>
+#include <fcntl.h>
 #include <fstream>
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <pthread.h>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -28,6 +33,117 @@ using Clock = std::chrono::steady_clock;
 uint64_t elapsed_ns(Clock::time_point from) {
     return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - from).count());
 }
+uint64_t monotonic_ns() {
+    timespec now{};
+    if (clock_gettime(CLOCK_MONOTONIC, &now)) return 0;
+    return static_cast<uint64_t>(now.tv_sec) * 1000000000ULL + static_cast<uint64_t>(now.tv_nsec);
+}
+int sleep_until(uint64_t target_ns) {
+    timespec target{static_cast<time_t>(target_ns / 1000000000ULL),
+                    static_cast<long>(target_ns % 1000000000ULL)};
+    int result;
+    do {
+        result = clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &target, nullptr);
+    } while (result == EINTR);
+    return result;
+}
+
+class GpioTrigger {
+public:
+    explicit GpioTrigger(unsigned hz) : hz_(hz) {}
+
+    ~GpioTrigger() { close(); }
+
+    int open_gpio() {
+        char gpio_dir[64];
+        char gpio_value[80];
+        std::snprintf(gpio_dir, sizeof(gpio_dir), "/sys/class/gpio/gpio%u", gpio_);
+        std::snprintf(gpio_value, sizeof(gpio_value), "%s/value", gpio_dir);
+        if (access(gpio_dir, F_OK) == 0) { errno = EBUSY; return -1; }
+        if (write_text("/sys/class/gpio/export", std::to_string(gpio_))) return -1;
+        exported_ = true;
+        if (write_text(std::string(gpio_dir) + "/direction", "low")) return -1;
+        fd_ = ::open(gpio_value, O_WRONLY | O_CLOEXEC);
+        return fd_ < 0 ? -1 : 0;
+    }
+
+    int start() {
+        if (fd_ < 0) { errno = EINVAL; return -1; }
+        stop_.store(false);
+        worker_ = std::thread(&GpioTrigger::run, this);
+        return 0;
+    }
+
+    void stop() {
+        stop_.store(true);
+        if (worker_.joinable()) worker_.join();
+    }
+
+    uint64_t pulses() const { return pulses_.load(); }
+    int failure() const { return failure_.load(); }
+
+private:
+    static int write_text(const std::string &path, const std::string &text) {
+        const int fd = ::open(path.c_str(), O_WRONLY | O_CLOEXEC);
+        if (fd < 0) return -1;
+        const ssize_t written = ::write(fd, text.data(), text.size());
+        const int saved = errno;
+        ::close(fd);
+        errno = saved;
+        return written == static_cast<ssize_t>(text.size()) ? 0 : -1;
+    }
+
+    int set(char value) {
+        if (lseek(fd_, 0, SEEK_SET) < 0) return -1;
+        return ::write(fd_, &value, 1) == 1 ? 0 : -1;
+    }
+
+    void run() {
+        sched_param parameter{};
+        parameter.sched_priority = 80;
+        if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &parameter))
+            std::fputs("mosaic: SCHED_FIFO unavailable for GPIO trigger\n", stderr);
+        const uint64_t start = monotonic_ns() + 10000000ULL;
+        uint64_t sequence = 0;
+        while (!stop_.load()) {
+            const uint64_t next = start + sequence * 1000000000ULL / hz_;
+            if (const int error = sleep_until(next)) { failure_.store(error); break; }
+            if (stop_.load()) break;
+            // Fail on excessive delay rather than emit catch-up or short pulses.
+            const uint64_t now = monotonic_ns();
+            if (now > next + 2000000ULL) { failure_.store(ETIMEDOUT); break; }
+            if (set('1')) { failure_.store(errno); break; }
+            const int error = sleep_until(monotonic_ns() + 1000000ULL);
+            if (set('0')) { failure_.store(errno); break; }
+            if (error) { failure_.store(error); break; }
+            ++pulses_;
+            ++sequence;
+        }
+        set('0');
+    }
+
+    void close() {
+        stop();
+        if (fd_ >= 0) {
+            set('0');
+            ::close(fd_);
+            fd_ = -1;
+        }
+        if (exported_) {
+            write_text("/sys/class/gpio/unexport", std::to_string(gpio_));
+            exported_ = false;
+        }
+    }
+
+    static constexpr unsigned gpio_ = 417;
+    unsigned hz_;
+    int fd_ = -1;
+    bool exported_ = false;
+    std::atomic<bool> stop_{false};
+    std::atomic<int> failure_{0};
+    std::atomic<uint64_t> pulses_{0};
+    std::thread worker_;
+};
 
 class MosaicSink final : public orbvi::nv12::Sink {
 public:
@@ -235,17 +351,37 @@ int main(int argc, char **argv) {
     sigaction(SIGINT, &action, nullptr);
     sigaction(SIGTERM, &action, nullptr);
     if (hb_mem_module_open()) { std::fputs("mosaic: hb_mem_module_open failed\n", stderr); return 1; }
+    GpioTrigger trigger(options.fps);
+    if (options.external && trigger.open_gpio()) {
+        std::perror("mosaic: GPIO trigger");
+        hb_mem_module_close();
+        return 1;
+    }
     std::array<std::unique_ptr<orbvi::nv12::X5Camera>, orbvi::mosaic::kCameraCount> cameras;
     std::array<orbvi::nv12::Source *, orbvi::mosaic::kCameraCount> sources{};
     for (unsigned camera = 0; camera < sources.size(); ++camera) {
         cameras[camera] = std::make_unique<orbvi::nv12::X5Camera>(
-            camera, options.fps, orbvi::mosaic::kInputWidth, orbvi::mosaic::kInputHeight);
+            camera, options.fps, orbvi::mosaic::kInputWidth, orbvi::mosaic::kInputHeight,
+            options.external, options.vts, options.trigger_readout);
         sources[camera] = cameras[camera].get();
     }
     MosaicSink sink(options);
     orbvi::nv12::Session session(sources, sink, stopped, std::numeric_limits<unsigned>::max(),
                                  options.max_skew_ns, options.frame_timeout_ms);
-    const int status = session.run();
+    const int status = session.run(
+        [&] { return options.external ? trigger.start() : 0; },
+        [&] {
+            trigger.stop();
+            if (options.external && trigger.failure()) {
+                std::fprintf(stderr, "mosaic: GPIO trigger failed errno=%d after %llu pulses\n",
+                             trigger.failure(), static_cast<unsigned long long>(trigger.pulses()));
+                return -1;
+            }
+            if (options.external)
+                std::fprintf(stderr, "mosaic: GPIO417 trigger stopped after %llu pulses\n",
+                             static_cast<unsigned long long>(trigger.pulses()));
+            return 0;
+        });
     const int memory_status = hb_mem_module_close();
     if (memory_status) std::fputs("mosaic: hb_mem_module_close failed\n", stderr);
     return memory_status ? 1 : (status == 130 && stopped ? 0 : status);

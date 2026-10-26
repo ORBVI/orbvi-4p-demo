@@ -14,6 +14,10 @@
 
 编译、部署、板内演示及与 SDK / ROS 2 的配合使用，请按 [ORBVI 4P 使用指南](https://huanshizhineng.feishu.cn/wiki/GoeUwlTiRiaY5skses2crmPFnCg?fromScene=spaceOverview) 操作。
 
+## 外触发测试开发
+
+四路 Trig-Readout 60fps 采集及 4P 与接收设备直连的 RTSP 演示，见 [60fps 使用说明](docs/CAMERA_TRIGGER_60FPS.md)。
+
 ## 硬件资料
 
 网口板（4PET A01）是 ORBVI 4P 的以太网接口扩展板，将板卡的以太网信号引出为 RJ45 网口，方便通过网线连接电脑或交换机。

@@ -1,4 +1,5 @@
 #include "x5_camera.hpp"
+#include "sensor_timing.hpp"
 #include "hb_camera_interface.h"
 #include "hb_mem_mgr.h"
 #include "hbn_api.h"
@@ -9,7 +10,8 @@ namespace orbvi {
 #define HEIGHT 1280
 #define RAW10 0x2b
 struct X5Camera::State {
-    unsigned port;
+    unsigned port, fps, vts;
+    bool trigger_readout = false;
     camera_handle_t sensor{};
     hbn_vnode_handle_t vin{};
     hbn_vflow_handle_t flow{};
@@ -18,7 +20,9 @@ struct X5Camera::State {
     camera_config_t config{};
     hbn_vnode_image_t frame{};
 };
-X5Camera::X5Camera(unsigned port) : state_(new State{}) { state_->port = port; }
+X5Camera::X5Camera(unsigned port, unsigned fps, unsigned vts, bool trigger_readout) : state_(new State{}) {
+    state_->port = port; state_->fps = fps; state_->vts = vts; state_->trigger_readout = trigger_readout;
+}
 X5Camera::~X5Camera() { close(); }
 static int checked(int result, const char *call, unsigned port)
 {
@@ -30,7 +34,7 @@ static int checked(int result, const char *call, unsigned port)
 int X5Camera::prepare(bool external)
 {
     auto *c = state_.get();
-    unsigned fps=external ? 30 : 60;
+    unsigned fps=c->fps ? c->fps : (external ? 30 : 60);
     c->mipi = {};
     c->mipi.rx_enable = 1;
     auto &rx = c->mipi.rx_attr;
@@ -77,6 +81,8 @@ int X5Camera::prepare(bool external)
     CALL(hbn_vflow_create(&c->flow)); c->flow_open=1;
     CALL(hbn_vflow_add_vnode(c->flow,c->vin));
     CALL(hbn_camera_attach_to_vin(c->sensor,c->vin));
+    if (external && c->vts) CALL(configure_sensor_vts(c->port, c->vts));
+    if (external && c->trigger_readout) CALL(configure_sensor_trigger_readout(c->port));
     return 0;
 }
 

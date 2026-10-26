@@ -10,7 +10,7 @@ mkdir -p dist/bin
 "$compiler" -std=c++17 -O2 -Wall -Wextra -Werror -pthread \
   -Iapps/camera -Inv12 -I"$sdk/include" -I"$rtsp/include" \
   apps/camera/main.cpp apps/camera/camera_options.cpp apps/camera/nv12_copy.cpp \
-  apps/camera/encoder_bsp.cpp apps/camera/rtsp_server.cpp apps/camera/process_group.cpp nv12/x5_camera.cpp \
+  apps/camera/encoder_bsp.cpp apps/camera/rtsp_server.cpp apps/camera/process_group.cpp nv12/x5_camera.cpp src/sensor_timing.cpp \
   -L"$sdk/lib" -L"$(dirname "$sdk")/lib" -L"$rtsp/lib" -L"$syslib" \
   -Wl,-rpath-link,"$sdk/lib" -Wl,-rpath-link,"$(dirname "$sdk")/lib" -Wl,-rpath-link,"$syslib" \
   -Wl,--start-group -lmk_api -lzlmediakit -lzltoolkit -lmov -lext-codec \
@@ -26,7 +26,7 @@ install -m 0755 apps/launchers/cam_demo dist/cam_demo
   -Iapps/camera -Inv12 -I"$sdk/include" -I"$rtsp/include" \
   apps/camera/mosaic_main.cpp apps/camera/mosaic_options.cpp apps/camera/mosaic_nv12.cpp \
   apps/camera/nv12_copy.cpp apps/camera/encoder_bsp.cpp apps/camera/rtsp_server.cpp \
-  nv12/frame_set.cpp nv12/x5_camera.cpp \
+  nv12/frame_set.cpp nv12/x5_camera.cpp src/sensor_timing.cpp \
   -L"$sdk/lib" -L"$(dirname "$sdk")/lib" -L"$rtsp/lib" -L"$syslib" \
   -Wl,-rpath-link,"$sdk/lib" -Wl,-rpath-link,"$(dirname "$sdk")/lib" -Wl,-rpath-link,"$syslib" \
   -Wl,--start-group -lmk_api -lzlmediakit -lzltoolkit -lmov -lext-codec \

@@ -1,4 +1,5 @@
 #include "x5_camera.hpp"
+#include "../src/sensor_timing.hpp"
 #include "hb_camera_interface.h"
 #include "hb_mem_mgr.h"
 #include "hbn_api.h"
@@ -17,7 +18,8 @@ int check(int status, const char *operation, unsigned port) {
 }
 
 struct X5Camera::State {
-    unsigned port, output_fps, output_width, output_height;
+    unsigned port, output_fps, output_width, output_height, vts;
+    bool external, trigger_readout;
     camera_handle_t sensor{};
     hbn_vnode_handle_t vin{}, isp{}, vse{};
     hbn_vflow_handle_t flow{};
@@ -28,10 +30,12 @@ struct X5Camera::State {
     hbn_vnode_image_t image{};
 };
 
-X5Camera::X5Camera(unsigned port, unsigned output_fps, unsigned output_width, unsigned output_height)
+X5Camera::X5Camera(unsigned port, unsigned output_fps, unsigned output_width, unsigned output_height,
+                   bool external, unsigned vts, bool trigger_readout)
     : state_(new State{}) {
     state_->port = port; state_->output_fps = output_fps;
     state_->output_width = output_width; state_->output_height = output_height;
+    state_->external = external; state_->vts = vts; state_->trigger_readout = trigger_readout;
 }
 X5Camera::~X5Camera() { close(); }
 
@@ -40,15 +44,15 @@ int X5Camera::prepare() {
 #define STEP(call) do { if (check((call), #call, c->port)) return -1; } while (0)
     c->mipi.rx_enable = 1;
     auto &rx = c->mipi.rx_attr;
-    rx.lane = 1; rx.datatype = raw10; rx.fps = 60;
+    rx.lane = 1; rx.datatype = raw10; rx.fps = c->external ? c->output_fps : 60;
     rx.mclk = 1; rx.mipiclk = 1200;
     rx.width = width; rx.height = height;
     rx.linelenth = 1400; rx.framelenth = 1500;
     rx.settle = 20; rx.channel_num = 1;
     std::snprintf(c->config.name, sizeof(c->config.name), "%s", "sc132gs");
     c->config.addr = c->port % 2 ? 0x32 : 0x30;
-    c->config.sensor_mode = 1;
-    c->config.fps = 60; c->config.width = width; c->config.height = height;
+    c->config.sensor_mode = c->external ? 6 : 1;
+    c->config.fps = c->external ? c->output_fps : 60; c->config.width = width; c->config.height = height;
     c->config.format = raw10; c->config.gpio_enable_bit = 1;
     c->config.mipi_cfg = &c->mipi;
     std::snprintf(c->config.calib_lname, sizeof(c->config.calib_lname), "%s", "disable");
@@ -84,7 +88,7 @@ int X5Camera::prepare() {
     vse_out.roi.w = width; vse_out.roi.h = height;
     vse_out.target_w = c->output_width; vse_out.target_h = c->output_height;
     vse_out.fmt = FRM_FMT_NV12; vse_out.bit_width = 8;
-    vse_out.fps.src = 60; vse_out.fps.dst = c->output_fps;
+    vse_out.fps.src = c->external ? c->output_fps : 60; vse_out.fps.dst = c->output_fps;
     hbn_buf_alloc_attr_t buffers{};
     buffers.buffers_num = 6; buffers.is_contig = 1;
     buffers.flags = HB_MEM_USAGE_CPU_READ_OFTEN | HB_MEM_USAGE_CPU_WRITE_OFTEN | HB_MEM_USAGE_CACHED;
@@ -113,6 +117,8 @@ int X5Camera::prepare() {
     STEP(hbn_vflow_bind_vnode(c->flow, c->vin, 0, c->isp, 0));
     STEP(hbn_vflow_bind_vnode(c->flow, c->isp, 0, c->vse, 0));
     STEP(hbn_camera_attach_to_vin(c->sensor, c->vin));
+    if (c->external && c->vts) STEP(orbvi::configure_sensor_vts(c->port, c->vts));
+    if (c->external && c->trigger_readout) STEP(orbvi::configure_sensor_trigger_readout(c->port));
     return 0;
 }
 

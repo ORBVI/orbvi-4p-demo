@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <csignal>
+#include <functional>
 
 namespace orbvi::nv12 {
 // Y and UV belong to the camera until release(); Sink::write must not retain them.
@@ -48,7 +49,9 @@ class Session {
 public:
     Session(std::array<Source *, 4> cameras, Sink &sink, const volatile sig_atomic_t &interrupted,
             unsigned groups, uint64_t max_skew_ns, unsigned timeout_ms);
-    int run();
+    // Start after all cameras are prepared; stop before camera teardown.
+    int run(const std::function<int()> &start_trigger = {},
+            const std::function<int()> &stop_trigger = {});
 private:
     std::array<Source *, 4> cameras_;
     Sink &sink_;

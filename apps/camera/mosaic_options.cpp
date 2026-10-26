@@ -23,11 +23,14 @@ bool rtsp_path(const char *path) {
 }
 int parse_options(int argc, const char *const *argv, Options &options) {
     options = Options{};
+    bool skew_set = false;
     for (int index = 1; index < argc; ++index) {
         const char *arg = argv[index];
         if (!std::strcmp(arg, "--help") || !std::strcmp(arg, "-h")) return 1;
         if (!std::strcmp(arg, "--diagnostics")) { options.diagnostics = true; continue; }
         if (!std::strcmp(arg, "--serial-compose")) { options.serial_compose = true; continue; }
+        if (!std::strcmp(arg, "--external")) { options.external = true; continue; }
+        if (!std::strcmp(arg, "--trigger-readout")) { options.trigger_readout = true; continue; }
         if (++index == argc) return 2;
         const char *value = argv[index];
         uint64_t number = 0;
@@ -47,10 +50,22 @@ int parse_options(int argc, const char *const *argv, Options &options) {
         } else if (!std::strcmp(arg, "--max-skew-ns")) {
             if (!parse_number(value, 1, 1000000000, number)) return 2;
             options.max_skew_ns = number;
+            skew_set = true;
         } else if (!std::strcmp(arg, "--frame-timeout-ms")) {
             if (!parse_number(value, 1, 60000, number)) return 2;
             options.frame_timeout_ms = static_cast<unsigned>(number);
+        } else if (!std::strcmp(arg, "--vts")) {
+            if (!parse_number(value, 1288, 65535, number)) return 2;
+            options.vts = static_cast<unsigned>(number);
         } else return 2;
+    }
+    if (!options.external && (options.trigger_readout || options.vts)) return 2;
+    if (options.external) {
+        if (options.fps != 30 && options.fps != 60) return 2;
+        if (!options.vts) options.vts = 1400;
+        if (options.fps == 60) options.trigger_readout = true;
+        if (!skew_set) options.max_skew_ns = 1000000;
+        if (options.max_skew_ns >= 1000000000ULL / options.fps / 2) return 2;
     }
     return 0;
 }
@@ -61,8 +76,11 @@ void print_usage() {
               "  --bps KBPS               H.264 bitrate (default: 8000)\n"
               "  --port PORT              RTSP port (default: 558)\n"
               "  --url /APP/STREAM        RTSP path (default: /live/PRR)\n"
-              "  --max-skew-ns N          Max group timestamp span (default: 40000000)\n"
+              "  --max-skew-ns N          Max timestamp span (free: 40ms, external: 1ms)\n"
               "  --frame-timeout-ms N     Group timeout (default: 3000)\n"
+              "  --external               GPIO417 trigger; 60fps selects Readout/VTS1400\n"
+              "  --vts N                  External-mode sensor VTS override\n"
+              "  --trigger-readout        Select SC132GS Trig-Readout\n"
               "  --diagnostics            Print FPS, stage times, queue drops and skew\n"
               "  --serial-compose         CPU fallback: compose tiles sequentially");
 }
