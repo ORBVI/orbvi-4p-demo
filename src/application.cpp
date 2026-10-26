@@ -47,7 +47,7 @@ int run_application(int argc, char **argv)
         std::array<CameraSource *, 4> sources{};
         std::array<FrameSink *, 4> outputs{};
         for (unsigned i = 0; i < 4; ++i) {
-            cameras[i] = std::make_unique<X5Camera>(i);
+            cameras[i] = std::make_unique<X5Camera>(i, options.fps, options.vts, options.trigger_readout);
             sinks[i] = std::make_unique<FileSink>(options.output, options.discard);
             sources[i] = cameras[i].get();
             outputs[i] = sinks[i].get();

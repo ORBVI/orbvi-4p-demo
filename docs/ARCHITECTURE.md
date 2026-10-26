@@ -87,3 +87,13 @@ bash tests/build-standalone.sh
 主机测试覆盖参数、先准备后启动、部分初始化失败、输出异常时还帧、
 无帧超时、逆序清理，以及清理错误优先于信号退出。
 板端命令及实测边界见 `VALIDATION.md`。
+
+
+## 四路外触发 60fps
+
+`src/sensor_timing.*` 在 SDK 初始化后、启动流前设置并读回 VTS 与 Readout 模式，
+保留曝光/增益寄存器检查。RAW、NV12 与拼接 RTSP 共用相机后端配置。
+`mosaic_rtsp_demo --external --fps 60` 独立管理 GPIO417 的触发与退出清理；
+NV12 Session 在四路初始化完成后、启动流前启动触发，在销毁相机前停止触发。
+`orbvi-verify trigger` / `trigger-nv12` 提供限时的采集验收。
+运行与直连接收方式见 [60fps 使用说明](CAMERA_TRIGGER_60FPS.md)。

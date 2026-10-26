@@ -23,8 +23,8 @@ dist/wifi_example.sh: scripts/wifi_example.sh
 
 SOURCES := $(wildcard src/*.cpp)
 HEADERS := $(wildcard src/*.hpp)
-VERIFY_SOURCES := $(wildcard tools/*.cpp)
-VERIFY_HEADERS := $(wildcard tools/*.hpp)
+VERIFY_SOURCES := $(wildcard tools/*.cpp) src/sensor_timing.cpp
+VERIFY_HEADERS := $(wildcard tools/*.hpp) src/sensor_timing.hpp
 VERIFY_CORE := tools/validation.cpp tools/runtime.cpp tools/phase.cpp
 
 dist/orbvi-verify: $(VERIFY_SOURCES) $(VERIFY_HEADERS)
@@ -50,6 +50,10 @@ test: test-sync test-apps test-wifi
 	@mkdir -p .build
 	$(HOST_CXX) -std=c++17 -Wall -Wextra -Werror -Isrc tests/test_options.cpp src/options.cpp -o .build/test-options
 	.build/test-options
+	$(HOST_CXX) $(CXXFLAGS) -Isrc tests/test_sensor_timing.cpp src/sensor_timing.cpp -Wl,--wrap=open,--wrap=ioctl,--wrap=close -o .build/test-sensor-timing
+	.build/test-sensor-timing
+	$(HOST_CXX) $(CXXFLAGS) -Isrc tests/test_sensor_trigger_readout.cpp src/sensor_timing.cpp -Wl,--wrap=open,--wrap=ioctl,--wrap=close -o .build/test-sensor-trigger-readout
+	.build/test-sensor-trigger-readout
 	$(HOST_CXX) $(CXXFLAGS) -Isrc tests/test_session.cpp src/capture_session.cpp -o .build/test-session
 	.build/test-session
 	$(HOST_CXX) $(CXXFLAGS) -Isrc tests/test_file_sink.cpp src/file_sink.cpp -o .build/test-file-sink
@@ -78,4 +82,4 @@ test-injection:
 	$(CXX) -std=c++17 -Wall -Wextra -Werror -shared -fPIC -I"$(SDK_INCLUDE)" tests/fail_stop.cpp -ldl -o dist/test-fail-stop.so
 
 clean:
-	rm -f dist/orbvi-4p-demo dist/orbvi-verify dist/run.sh dist/sync_time.sh dist/wifi_example.sh .build/test-options .build/test-session .build/test-file-sink .build/test-validation .build/test-runtime .build/test-phase .build/test-verify-cli .build/orbvi-verify
+	rm -f dist/orbvi-4p-demo dist/orbvi-verify dist/run.sh dist/sync_time.sh dist/wifi_example.sh .build/test-options .build/test-sensor-timing .build/test-sensor-trigger-readout .build/test-session .build/test-file-sink .build/test-validation .build/test-runtime .build/test-phase .build/test-verify-cli .build/orbvi-verify

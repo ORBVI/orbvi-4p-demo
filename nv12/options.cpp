@@ -19,9 +19,11 @@ bool parse_number(const char *text, uint64_t min, uint64_t max, uint64_t &value)
 
 int parse_options(int argc, const char *const *argv, Options &options) {
     options = Options{};
+    bool fps_set = false;
     for (int index = 1; index < argc; ++index) {
         const char *arg = argv[index];
         if (!std::strcmp(arg, "--help") || !std::strcmp(arg, "-h")) return 1;
+        if (!std::strcmp(arg, "--trigger-readout")) { options.trigger_readout = true; continue; }
         if (!std::strcmp(arg, "--discard")) { options.discard = true; continue; }
         if (++index == argc) return 2;
         const char *value = argv[index];
@@ -35,11 +37,23 @@ int parse_options(int argc, const char *const *argv, Options &options) {
         } else if (!std::strcmp(arg, "--max-skew-ns")) {
             if (!parse_number(value, 1, 1000000000, number)) return 2;
             options.max_skew_ns = number;
+        } else if (!std::strcmp(arg, "--mode")) {
+            if (!std::strcmp(value, "external")) options.external = true;
+            else if (!std::strcmp(value, "free")) options.external = false;
+            else return 2;
+        } else if (!std::strcmp(arg, "--fps")) {
+            if (!parse_number(value, 30, 60, number) || (number != 30 && number != 60)) return 2;
+            options.fps = static_cast<unsigned>(number); fps_set = true;
+        } else if (!std::strcmp(arg, "--vts")) {
+            if (!parse_number(value, 1288, 65535, number)) return 2;
+            options.vts = static_cast<unsigned>(number);
         } else if (!std::strcmp(arg, "--output")) {
             if (!*value) return 2;
             options.output = value;
         } else return 2;
     }
+    if (options.external && !fps_set) options.fps = 30;
+    if (!options.external && (options.vts || options.trigger_readout)) return 2;
     return 0;
 }
 
@@ -51,6 +65,10 @@ void print_usage() {
               "  --max-skew-ns N        Maximum SDK timestamp spread (default: 1000000)\n"
               "  --timeout-ms N         Complete-set timeout (default: 3000)\n"
               "  --discard              Save metadata without NV12 pixels\n"
+              "  --mode free|external   Capture mode (default: free)\n"
+              "  --fps 30|60            Target frame rate (external default: 30)\n"
+              "  --trigger-readout      External readout trigger; exposure registers unchanged\n"
+              "  --vts LINES            External sensor VTS override\n"
               "  --help                 Show help");
 }
 }

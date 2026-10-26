@@ -9,6 +9,8 @@ struct Options {
     uint64_t max_skew_ns = 1000000;
     std::string output = "nv12-capture";
     bool discard = false;
+    bool external = false, trigger_readout = false;
+    unsigned fps = 60, vts = 0;
 };
 // 0: parsed, 1: help, 2: invalid options.
 int parse_options(int argc, const char *const *argv, Options &options);

@@ -19,7 +19,8 @@ Session::Session(std::array<Source *, 4> cameras, Sink &sink,
     : cameras_(cameras), sink_(sink), interrupted_(interrupted), groups_(groups),
       max_skew_ns_(max_skew_ns), timeout_ms_(timeout_ms) {}
 
-int Session::run() {
+int Session::run(const std::function<int()> &start_trigger,
+                 const std::function<int()> &stop_trigger) {
     if (used_) return 1;
     used_ = true;
     FrameSet set;
@@ -31,11 +32,14 @@ int Session::run() {
             if (!camera || camera->prepare()) { result = 1; break; }
         }
         if (!result && sink_.open()) result = 1;
+        if (!result && !interrupted_ && start_trigger && start_trigger()) result = 1;
         if (!result) {
             for (auto *camera : cameras_) {
                 if (camera->start()) { result = 1; break; }
             }
         }
+        last_group = monotonic_ns();
+        if (!result) { std::puts("Capture ready"); std::fflush(stdout); }
         for (unsigned group = 0; !result && !interrupted_ && group < groups_;) {
             for (unsigned port = 0; port < 4 && !interrupted_; ++port) {
                 if (!leased[port] && cameras_[port]->acquire(set.frames[port], 100) == 0)
@@ -57,6 +61,10 @@ int Session::run() {
                 unsigned oldest = static_cast<unsigned>(range.first - set.frames.begin());
                 if (cameras_[oldest]->release()) result = 1;
                 leased[oldest] = false;
+                if (monotonic_ns() - last_group >= uint64_t(timeout_ms_) * 1000000) {
+                    std::fprintf(stderr, "NV12 frame set: timestamp matching timed out\n");
+                    result = 1;
+                }
                 continue;
             }
             if (sink_.write(group, set)) result = 1;
@@ -71,6 +79,8 @@ int Session::run() {
         std::fprintf(stderr, "NV12 frame set: %s\n", error.what());
         result = 1;
     } catch (...) { result = 1; }
+    try { if (stop_trigger && stop_trigger()) result = 1; }
+    catch (...) { result = 1; }
     for (int port = 3; port >= 0; --port) {
         if (leased[port] && cameras_[port]->release()) result = 1;
         if (cameras_[port] && cameras_[port]->close()) result = 1;

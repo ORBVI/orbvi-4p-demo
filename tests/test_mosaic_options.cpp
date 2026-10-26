@@ -19,6 +19,18 @@ int main() {
     assert(parse_options(3, bad_path, options) == 2);
     const char *bad_port[]{"mosaic_rtsp_demo", "--port", "65536"};
     assert(parse_options(3, bad_port, options) == 2);
+    const char *external[]{"mosaic_rtsp_demo", "--external", "--fps", "60"};
+    assert(parse_options(4, external, options) == 0);
+    assert(options.external && options.trigger_readout && options.vts == 1400);
+    assert(options.max_skew_ns == 1000000);
+    const char *wide[]{"mosaic_rtsp_demo", "--external", "--fps", "60", "--max-skew-ns", "16666667"};
+    assert(parse_options(6, wide, options) == 2);
+    const char *free_readout[]{"mosaic_rtsp_demo", "--trigger-readout"};
+    assert(parse_options(2, free_readout, options) == 2);
+    const char *free_vts[]{"mosaic_rtsp_demo", "--vts", "1400"};
+    assert(parse_options(3, free_vts, options) == 2);
+    const char *external_40[]{"mosaic_rtsp_demo", "--external", "--fps", "40"};
+    assert(parse_options(4, external_40, options) == 2);
     const char *help[]{"mosaic_rtsp_demo", "--help"};
     assert(parse_options(2, help, options) == 1);
 }

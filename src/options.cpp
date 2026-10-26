@@ -23,6 +23,7 @@ int parse_options(int argc, const char *const *argv, struct options *o)
         const char *arg=argv[i];
         unsigned camera;
         if (!strcmp(arg,"--help") || !strcmp(arg,"-h")) return 1;
+        if (!strcmp(arg,"--trigger-readout")) { o->trigger_readout=true; continue; }
         if (!strcmp(arg,"--discard")) { o->discard=1; continue; }
         if (++i == argc) return -1;
         const char *value=argv[i];
@@ -34,6 +35,10 @@ int parse_options(int argc, const char *const *argv, struct options *o)
             if (number(value,1,1000000,&o->frames)) return -1;
         } else if (!strcmp(arg,"--timeout-ms")) {
             if (number(value,1,60000,&o->timeout_ms)) return -1;
+        } else if (!strcmp(arg,"--fps")) {
+            if (number(value,30,60,&o->fps) || (o->fps != 30 && o->fps != 60)) return -1;
+        } else if (!strcmp(arg,"--vts")) {
+            if (number(value,1288,65535,&o->vts)) return -1;
         } else if (!strcmp(arg,"--output")) {
             if (!value[0]) return -1;
             o->output=value;
@@ -43,6 +48,8 @@ int parse_options(int argc, const char *const *argv, struct options *o)
             else return -1;
         } else return -1;
     }
+    if (!o->fps) o->fps = o->external ? 30 : 60;
+    if (!o->external && (o->vts || o->trigger_readout || o->fps != 60)) return -1;
     return 0;
 }
 
@@ -54,6 +61,9 @@ void print_usage(void)
          "  --frames N             Frames per camera (default: 10)\n"
          "  --output DIR           New output directory (default: capture)\n"
          "  --mode free|external   Free running or external slave mode\n"
+         "  --fps 30|60            External Camera/MIPI rate (default: 30)\n"
+         "  --trigger-readout      External readout trigger; exposure registers unchanged\n"
+         "  --vts LINES            External sensor VTS override; omitted keeps BSP value\n"
          "  --timeout-ms N         Maximum time without a frame (default: 3000)\n"
          "  --discard              Write CSV only, discard pixel data\n"
          "  --help                 Show help\n"

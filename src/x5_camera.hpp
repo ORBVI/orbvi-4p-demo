@@ -6,7 +6,7 @@ namespace orbvi {
 // SDK types and SC132GS wiring are private to this backend.
 class X5Camera final : public CameraSource {
 public:
-    explicit X5Camera(unsigned port);
+    explicit X5Camera(unsigned port, unsigned fps = 0, unsigned vts = 0, bool trigger_readout = false);
     ~X5Camera() override;
     int prepare(bool external) override;
     int start() override;

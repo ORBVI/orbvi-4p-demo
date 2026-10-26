@@ -9,6 +9,6 @@ if [ -d "$system_lib" ]; then
     set -- "$@" -L"$system_lib" -Wl,-rpath-link,"$system_lib"
 fi
 "$compiler" -std=c++17 -O2 -Wall -Wextra -Werror -pthread -Inv12 -I"$sdk/include" \
-    nv12/main.cpp nv12/options.cpp nv12/frame_set.cpp nv12/sink.cpp nv12/x5_camera.cpp \
+    nv12/main.cpp nv12/options.cpp nv12/frame_set.cpp nv12/sink.cpp nv12/x5_camera.cpp src/sensor_timing.cpp \
     "$@" -Wl,-rpath,/usr/hobot/lib -Wl,--enable-new-dtags \
     -lcam -lvpf -lhbmem -lalog -lpthread -o dist/orbvi-nv12-demo
