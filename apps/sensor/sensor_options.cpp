@@ -145,7 +145,7 @@ int parse_options(int argc, const char *const *argv, const std::string &config_p
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--help" || arg == "-h") return 1;
-        if (arg == "--diagnostics") { camera_storage.push_back(arg); continue; }
+        if (arg == "--diagnostics" || arg == "--read-exposure") { camera_storage.push_back(arg); continue; }
         if (camera_values.count(arg)) {
             if (++i == argc) return 2;
             camera_storage.push_back(arg); camera_storage.emplace_back(argv[i]); continue;

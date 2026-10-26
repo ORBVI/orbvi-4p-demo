@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
         timestamp_index << "timestamp_ns,encoded_bytes\n";
     }
     nv12::X5Camera source(static_cast<unsigned>(options.camera_id), options.fps,
-                          source_width, source_height);
+                          source_width, source_height, false, 0, false, options.read_exposure);
     camera::RtspServer server(options.rtsp_base_port + static_cast<unsigned>(options.camera_id),
                               options.url, options.codec, camera_record_directory);
     camera::Options encoder_options = options;

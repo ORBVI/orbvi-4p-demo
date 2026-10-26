@@ -26,6 +26,7 @@ int parse_options(int argc, const char *const *argv, Options &options) {
     for (int i = 1; i < argc; ++i) {
         const char *arg = argv[i];
         if (!strcmp(arg, "--help") || !strcmp(arg, "-h")) return 1;
+        if (!strcmp(arg, "--read-exposure")) { options.read_exposure = true; continue; }
         if (!strcmp(arg, "--diagnostics")) { options.diagnostics = true; continue; }
         if (!strcmp(arg, "--trigger-mode")) {
             if (++i == argc || (strcmp(argv[i], "software_gpio") && strcmp(argv[i], "none"))) return 2;
@@ -125,6 +126,7 @@ void print_usage() {
          "  --url /APP/STREAM      RTSP path (default: /live/PRR)\n"
          "  --rotate 0|90|180|270  Encoded-stream rotation\n"
          "  --rtsp-base-port PORT  First RTSP port (default: 554)\n"
+         "  --read-exposure         Print sensor-register duration and estimated start every 1s (default: off)\n"
          "  --diagnostics          Print counters\n"
          "  --diag-interval-ms N   Diagnostics interval (default: 1000)\n"
          "  --max-skew-ns N        Four-camera grouping threshold\n"

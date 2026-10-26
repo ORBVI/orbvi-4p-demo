@@ -24,6 +24,7 @@ int parse_options(int argc, const char *const *argv, Options &options) {
         const char *arg = argv[index];
         if (!std::strcmp(arg, "--help") || !std::strcmp(arg, "-h")) return 1;
         if (!std::strcmp(arg, "--trigger-readout")) { options.trigger_readout = true; continue; }
+        if (!std::strcmp(arg, "--read-exposure")) { options.read_exposure = true; continue; }
         if (!std::strcmp(arg, "--discard")) { options.discard = true; continue; }
         if (++index == argc) return 2;
         const char *value = argv[index];
@@ -69,6 +70,7 @@ void print_usage() {
               "  --fps 30|60            Target frame rate (external default: 30)\n"
               "  --trigger-readout      External readout trigger; exposure registers unchanged\n"
               "  --vts LINES            External sensor VTS override\n"
+              "  --read-exposure         Print sensor-register duration and estimated start every 1s (default: off)\n"
               "  --help                 Show help");
 }
 }

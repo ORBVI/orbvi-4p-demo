@@ -1,4 +1,6 @@
 #include "x5_camera.hpp"
+#include "exposure.hpp"
+#include "hbn_isp_api.h"
 #include "../src/sensor_timing.hpp"
 #include "hb_camera_interface.h"
 #include "hb_mem_mgr.h"
@@ -7,6 +9,7 @@
 #include "vin_cfg.h"
 #include "vse_cfg.h"
 #include <cstdio>
+#include <time.h>
 
 namespace orbvi::nv12 {
 namespace {
@@ -28,13 +31,16 @@ struct X5Camera::State {
     mipi_config_t mipi{};
     camera_config_t config{};
     hbn_vnode_image_t image{};
+    ExposureReporter exposure;
+    uint32_t exposure_line_rate = 0;
 };
 
 X5Camera::X5Camera(unsigned port, unsigned output_fps, unsigned output_width, unsigned output_height,
-                   bool external, unsigned vts, bool trigger_readout)
+                   bool external, unsigned vts, bool trigger_readout, bool read_exposure)
     : state_(new State{}) {
     state_->port = port; state_->output_fps = output_fps;
     state_->output_width = output_width; state_->output_height = output_height;
+    state_->exposure = ExposureReporter(port, read_exposure);
     state_->external = external; state_->vts = vts; state_->trigger_readout = trigger_readout;
 }
 X5Camera::~X5Camera() { close(); }
@@ -155,6 +161,26 @@ int X5Camera::acquire(Frame &frame, unsigned timeout_ms) {
              static_cast<uint32_t>(buffer.height), static_cast<uint32_t>(buffer.stride),
              static_cast<uint32_t>(buffer.vstride), c->image.info.timestamps,
              c->image.info.sys_timestamps};
+    if (c->exposure.enabled()) {
+        timespec now{};
+        if (!clock_gettime(CLOCK_MONOTONIC, &now)) {
+            const uint64_t now_ns = uint64_t(now.tv_sec) * 1000000000ULL + uint64_t(now.tv_nsec);
+            c->exposure.poll(now_ns, frame.id, frame.timestamp_ns, [c] {
+                hbn_isp_exposure_attr_t attr{};
+                const int status = hbn_isp_get_exposure_attr(c->isp, &attr);
+                ExposureReading reading{status, attr.manual_attr.exp_time,
+                                        attr.manual_attr.frame_id, attr.manual_attr.timestamps};
+                if (!c->exposure_line_rate) {
+                    uint32_t line_rate = 0;
+                    reading.line_rate_status = hbn_isp_get_lines_persecond(c->isp, &line_rate);
+                    if (!reading.line_rate_status) c->exposure_line_rate = line_rate;
+                } else reading.line_rate_status = 0;
+                reading.lines_per_second = c->exposure_line_rate;
+                reading.sensor_status = orbvi::read_sensor_exposure(c->port, reading.sensor_code);
+                return reading;
+            });
+        }
+    }
     return 0;
 }
 

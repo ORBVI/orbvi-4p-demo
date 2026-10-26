@@ -77,6 +77,7 @@ int main(int argc, char **argv) {
     add(camera, "--diag-interval-ms", options.camera.diag_interval_ms);
     add(camera, "--trigger-mode", options.camera.trigger_mode);
     if (options.camera.diagnostics) camera.emplace_back("--diagnostics");
+    if (options.camera.read_exposure) camera.emplace_back("--read-exposure");
     if (!options.record_bag_path.empty()) {
         add(camera, "--record-h264-dir", bag_spool.string());
         add(camera, "--record-frame-skip", options.record_frame_skip);
