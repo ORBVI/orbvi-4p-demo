@@ -14,6 +14,8 @@ $cxx $flags -Iapps/serial tests/test_serial_demo.cpp apps/serial/serial_port.cpp
 .build/test-serial-demo
 $cxx $flags -Iapps/timesync tests/test_timesync_demo.cpp apps/timesync/time_sync.cpp -o .build/test-timesync-demo
 .build/test-timesync-demo
+$cxx $flags -pthread apps/timesync/main.cpp apps/timesync/time_sync.cpp -o .build/timesync-demo-cli
+python3 tests/test_timesync_cli.py .build/timesync-demo-cli
 $cxx $flags -Iapps/imu -Itools tests/test_imu_demo.cpp apps/imu/imu_reader.cpp apps/imu/imu_wire.cpp tools/validation.cpp -o .build/test-imu-demo
 .build/test-imu-demo
 $cxx $flags -Iapps/imu tests/test_imu_wire.cpp apps/imu/imu_wire.cpp -o .build/test-imu-wire

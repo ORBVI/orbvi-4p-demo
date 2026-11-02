@@ -116,15 +116,23 @@ void report(const Match &m, bool apply) {
 int main(int argc, char **argv) {
     std::string uart = "/dev/ttyS1", selected_pps;
     bool apply = false;
+    Protocol protocol = Protocol::AUTO;
+    const char *usage = "Usage: timesync_demo [--uart /dev/ttyS1] [--pps /dev/ppsN] [--protocol AUTO|ZDA|RMC] [--apply]\n"
+                        "Default protocol: AUTO (ZDA and RMC). Default is receive-only; --apply SETS CLOCK_REALTIME from TEST UTC!\n";
     for (int i = 1; i < argc; ++i) {
         if (!std::strcmp(argv[i], "--version")) { std::printf("timesync_demo %s\n", orbvi::kDemoVersion); return 0; }
+        if (!std::strcmp(argv[i], "--help")) { std::printf("%s", usage); return 0; }
         if (!std::strcmp(argv[i], "--apply")) { apply = true; continue; }
+        if (!std::strcmp(argv[i], "--protocol") && i + 1 < argc) {
+            const auto selected = parse_protocol(argv[++i]);
+            if (!selected) { std::fprintf(stderr, "Invalid protocol: expected AUTO, ZDA or RMC\n%s", usage); return 2; }
+            protocol = *selected; continue;
+        }
         if ((!std::strcmp(argv[i], "--uart") || !std::strcmp(argv[i], "--pps")) && i + 1 < argc) {
             const bool is_uart = !std::strcmp(argv[i], "--uart");
             (is_uart ? uart : selected_pps) = argv[++i]; continue;
         }
-        std::fprintf(stderr, "Usage: timesync_demo [--uart /dev/ttyS1] [--pps /dev/ppsN] [--apply]\n"
-                             "Default is receive-only; --apply SETS CLOCK_REALTIME from TEST UTC!\n");
+        std::fprintf(stderr, "%s", usage);
         return 2;
     }
     if (apply && time_daemon_running()) {
@@ -176,7 +184,8 @@ int main(int argc, char **argv) {
     });
     struct sigaction action{}; action.sa_handler = stop; sigemptyset(&action.sa_mask);
     sigaction(SIGINT, &action, nullptr); sigaction(SIGTERM, &action, nullptr);
-    std::printf("Listening UART=%s PPS=%s mode=%s (source is simulated UTC)\n", uart.c_str(), pps_path.c_str(), apply ? "APPLY" : "observe");
+    std::printf("Listening UART=%s PPS=%s mode=%s protocol=%s (source is simulated UTC)\n",
+                uart.c_str(), pps_path.c_str(), apply ? "APPLY" : "observe", protocol_name(protocol));
     std::fflush(stdout);
     Pairer pairer;
     std::string line;
@@ -200,9 +209,9 @@ int main(int argc, char **argv) {
                 const char c = bytes[j];
                 if (c == '\n') {
                     if (!line.empty() && line.back() == '\r') line.pop_back();
-                    if (auto utc = parse_rmc(line)) {
-                        if (auto matched = pairer.on_rmc(*utc, Steady::now())) report(*matched, apply);
-                    } else if (!line.empty()) std::fprintf(stderr, "Invalid RMC discarded\n");
+                    if (auto utc = parse_sentence(line, protocol)) {
+                        if (auto matched = pairer.on_time(*utc, Steady::now())) report(*matched, apply);
+                    } else if (!line.empty()) std::fprintf(stderr, "Invalid %s sentence discarded\n", protocol_name(protocol));
                     line.clear();
                 } else if (line.size() < 127) line.push_back(c);
                 else line.clear();
@@ -210,7 +219,7 @@ int main(int argc, char **argv) {
         }
         if ((fds[0].revents | fds[1].revents) & (POLLERR | POLLHUP | POLLNVAL)) break;
         pairer.tick(Steady::now());
-        if (previous_lock >= 3 && pairer.consecutive() == 0) std::fprintf(stderr, "LOST PPS/RMC lock\n");
+        if (previous_lock >= 3 && pairer.consecutive() == 0) std::fprintf(stderr, "LOST PPS/time lock\n");
         previous_lock = pairer.consecutive();
     }
     done = true; worker.join();

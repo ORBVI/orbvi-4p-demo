@@ -7,12 +7,16 @@
 - 相机图像：单路 / 四路 RAW 采集、H.264 RTSP 视频及 NV12 / JPEG 图像发送。
 - IMU 数据：读取加速度和角速度，通过 UDP 发送到电脑。
 - CPU 温度：读取板端温度，通过 UDP 发送到电脑。
-- 时钟同步：PPS 与串口时间报文接收、NTP 校时。
+- 时钟同步：PPS 与串口 ZDA/RMC 时间报文自动接收、NTP 校时。
 - 串口通信：串口收发示例。
 
 ## 使用文档
 
 编译、部署、板内演示及与 SDK / ROS 2 的配合使用，请按 [ORBVI 4P 使用指南](https://huanshizhineng.feishu.cn/wiki/GoeUwlTiRiaY5skses2crmPFnCg?fromScene=spaceOverview) 操作。
+
+## UART/PPS 授时
+
+`timesync_demo` 0.1.1 默认自动接收 ZDA/RMC，无需按工装选择协议。默认只读，`--apply` 才允许调钟。接线与使用方法见 [授时 Demo 说明](docs/TIMESYNC_DEMO.md)。
 
 ## 外触发测试开发
 
