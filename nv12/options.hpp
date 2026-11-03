@@ -9,6 +9,7 @@ struct Options {
     uint64_t max_skew_ns = 1000000;
     std::string output = "nv12-capture";
     bool discard = false;
+    bool read_exposure = false;
     bool external = false, trigger_readout = false;
     unsigned fps = 60, vts = 0;
 };

@@ -12,6 +12,7 @@ struct Options {
     uint64_t max_skew_ns = 40000000;
     std::string url = "/live/PRR";
     bool diagnostics = false;
+    bool read_exposure = false;
     bool serial_compose = false;
     bool external = false;
     bool trigger_readout = false;

@@ -20,12 +20,15 @@ int main() {
     const char *args[]{"sensor_demo", "--fps", "30", "--codec", "h264",
                        "--record-mp4-dir", "/data/run"};
     assert(parse_options(7, args, path, options) == 0);
+    assert(!options.camera.read_exposure);
     assert(options.camera.width == 720 && options.camera.height == 480);
     assert(options.camera.fps == 30 && options.camera.codec == orbvi::camera::Codec::H264);
     assert(options.camera.bitrate_kbps == 6000 && options.camera.url == "/live/test");
     assert(options.imu_sample_rate_hz == 500 && options.imu_print_rate_hz == 25);
     assert(options.imu_print_metrics && options.record_mp4_directory == "/data/run");
     assert(options.imu_udp_dest == "127.0.0.1:5600");
+    const char *exposure[]{"sensor_demo", "--read-exposure"};
+    assert(parse_options(2, exposure, path, options) == 0 && options.camera.read_exposure);
     const char *override_dest[]{"sensor_demo", "--udp-dest", "192.168.1.100:5601"};
     assert(parse_options(3, override_dest, path, options) == 0);
     assert(options.imu_udp_dest == "192.168.1.100:5601");
@@ -45,7 +48,7 @@ int main() {
     const char *defaults[]{"sensor_demo"};
     assert(parse_options(1, defaults, generated, options) == 0);
     assert(std::filesystem::exists(generated));
-    assert(options.imu_udp_dest.empty());
+    assert(options.imu_udp_dest.empty() && !options.camera.read_exposure);
     assert(std::filesystem::remove(generated));
     assert(std::filesystem::remove(generated.parent_path()));
     std::filesystem::remove(path);

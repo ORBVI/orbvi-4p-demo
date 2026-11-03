@@ -5,6 +5,7 @@ int main() {
     Options options;
     const char *basic[]{"mosaic_rtsp_demo"};
     assert(parse_options(1, basic, options) == 0);
+    assert(!options.read_exposure);
     assert(options.port == 558 && options.url == "/live/PRR" && options.fps == 30);
     assert(options.max_skew_ns == 40000000 && options.bitrate_kbps == 8000 && !options.serial_compose);
     const char *custom[]{"mosaic_rtsp_demo", "--fps", "50", "--bps", "12000", "--port", "8558",
@@ -33,4 +34,11 @@ int main() {
     assert(parse_options(4, external_40, options) == 2);
     const char *help[]{"mosaic_rtsp_demo", "--help"};
     assert(parse_options(2, help, options) == 1);
+    const char *exposure[]{"mosaic_rtsp_demo", "--read-exposure"};
+    assert(parse_options(2, exposure, options) == 0 && options.read_exposure);
+    assert(parse_options(1, basic, options) == 0 && !options.read_exposure);
+    const char *diagnostics_only[]{"mosaic_rtsp_demo", "--diagnostics"};
+    assert(parse_options(2, diagnostics_only, options) == 0);
+    assert(options.diagnostics && !options.read_exposure);
+
 }

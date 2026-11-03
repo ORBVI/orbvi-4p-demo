@@ -27,6 +27,7 @@ int parse_options(int argc, const char *const *argv, Options &options) {
     for (int index = 1; index < argc; ++index) {
         const char *arg = argv[index];
         if (!std::strcmp(arg, "--help") || !std::strcmp(arg, "-h")) return 1;
+        if (!std::strcmp(arg, "--read-exposure")) { options.read_exposure = true; continue; }
         if (!std::strcmp(arg, "--diagnostics")) { options.diagnostics = true; continue; }
         if (!std::strcmp(arg, "--serial-compose")) { options.serial_compose = true; continue; }
         if (!std::strcmp(arg, "--external")) { options.external = true; continue; }
@@ -81,6 +82,7 @@ void print_usage() {
               "  --external               GPIO417 trigger; 60fps selects Readout/VTS1400\n"
               "  --vts N                  External-mode sensor VTS override\n"
               "  --trigger-readout        Select SC132GS Trig-Readout\n"
+              "  --read-exposure         Print sensor-register duration and estimated start every 1s (default: off)\n"
               "  --diagnostics            Print FPS, stage times, queue drops and skew\n"
               "  --serial-compose         CPU fallback: compose tiles sequentially");
 }

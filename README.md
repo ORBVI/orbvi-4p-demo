@@ -35,3 +35,10 @@
 - [`scripts/`](scripts/)：构建与运行脚本。
 - [`build_deps/`](build_deps/)：板端交叉编译依赖。
 - [`tests/`](tests/)：测试代码。
+
+## 曝光时间读取
+
+使用 `--read-exposure` 按需打印每路相机的 传感器寄存器换算的曝光总时长、ISP 对照值和估算开始时间，默认关闭，
+每路最多每秒查询一次。NV12、分路 RTSP、拼接 RTSP 和 `sensor_demo` 均支持。
+开始时间为未经过物理校准的估算值，详细字段、运行示例及时间戳边界见
+[曝光时间读取说明](docs/EXPOSURE.md)。

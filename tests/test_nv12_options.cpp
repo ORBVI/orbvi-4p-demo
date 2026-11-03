@@ -6,6 +6,7 @@ int main() {
     Options options;
     const char *basic[]{"orbvi-nv12-demo"};
     assert(parse_options(1, basic, options) == 0);
+    assert(!options.read_exposure);
     assert(options.groups == 10 && options.output == "nv12-capture");
     const char *configured[]{"demo", "--frames", "5", "--output", "session",
                               "--max-skew-ns", "1000000", "--discard"};
@@ -28,4 +29,8 @@ int main() {
     assert(parse_options(1, basic, options) == 0 && !options.trigger_readout);
     const char *help[]{"demo", "--help"};
     assert(parse_options(2, help, options) == 1);
+    const char *exposure[]{"orbvi-nv12-demo", "--read-exposure"};
+    assert(parse_options(2, exposure, options) == 0 && options.read_exposure);
+    assert(parse_options(1, basic, options) == 0 && !options.read_exposure);
+
 }

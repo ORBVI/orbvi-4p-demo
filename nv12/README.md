@@ -63,3 +63,9 @@ Do not run it concurrently with another camera owner or trigger source.
 For a self-contained RTSP preview, use `mosaic_rtsp_demo --external --fps 60`.
 See [60fps capture and direct Ethernet RTSP](../docs/CAMERA_TRIGGER_60FPS.md)
 for board and receiver commands and timestamp semantics.
+
+## 曝光诊断
+
+添加 `--read-exposure`，每路最多每秒打印一次 传感器寄存器曝光时长、ISP 对照值及估算开始时间；
+默认不查询。字段来源、帧号匹配和实际曝光边沿的区别见
+[曝光时间读取说明](../docs/EXPOSURE.md)。

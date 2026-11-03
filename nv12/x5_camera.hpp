@@ -7,7 +7,8 @@ class X5Camera final : public Source {
 public:
     explicit X5Camera(unsigned port, unsigned output_fps = 60,
                       unsigned output_width = 1088, unsigned output_height = 1280,
-                      bool external = false, unsigned vts = 0, bool trigger_readout = false);
+                      bool external = false, unsigned vts = 0, bool trigger_readout = false,
+                      bool read_exposure = false);
     ~X5Camera() override;
     int prepare() override;
     int start() override;

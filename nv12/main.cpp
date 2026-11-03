@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
         std::array<Source *, 4> sources{};
         for (unsigned port = 0; port < 4; ++port) {
             cameras[port] = std::make_unique<X5Camera>(port, options.fps, 1088, 1280,
-                                                        options.external, options.vts, options.trigger_readout);
+                                                        options.external, options.vts, options.trigger_readout, options.read_exposure);
             sources[port] = cameras[port].get();
         }
         FileSink sink(options.output, options.discard);

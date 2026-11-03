@@ -6,6 +6,7 @@ int main() {
     Options options;
     const char *basic[]{"cam_demo"};
     assert(parse_options(1, basic, options) == 0);
+    assert(!options.read_exposure);
     assert(options.camera_id == -1 && options.codec == Codec::H264);
     assert(options.bitrate_kbps == 4000 && options.url == "/live/PRR");
     assert(options.width == 1280 && options.height == 1088);
@@ -29,4 +30,11 @@ int main() {
     assert(parse_options(3, bad_url, options) == 2);
     const char *rotate[]{"cam_demo", "--rotate", "180", "--fps", "60"};
     assert(parse_options(5, rotate, options) == 2);
+    const char *exposure[]{"cam_demo", "--read-exposure"};
+    assert(parse_options(2, exposure, options) == 0 && options.read_exposure);
+    assert(parse_options(1, basic, options) == 0 && !options.read_exposure);
+    const char *diagnostics_only[]{"cam_demo", "--diagnostics"};
+    assert(parse_options(2, diagnostics_only, options) == 0);
+    assert(options.diagnostics && !options.read_exposure);
+
 }

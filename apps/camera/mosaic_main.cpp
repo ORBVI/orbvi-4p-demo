@@ -362,7 +362,7 @@ int main(int argc, char **argv) {
     for (unsigned camera = 0; camera < sources.size(); ++camera) {
         cameras[camera] = std::make_unique<orbvi::nv12::X5Camera>(
             camera, options.fps, orbvi::mosaic::kInputWidth, orbvi::mosaic::kInputHeight,
-            options.external, options.vts, options.trigger_readout);
+            options.external, options.vts, options.trigger_readout, options.read_exposure);
         sources[camera] = cameras[camera].get();
     }
     MosaicSink sink(options);

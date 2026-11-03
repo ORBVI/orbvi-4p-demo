@@ -48,6 +48,12 @@ struct SensorBus {
         if (id != 0x0132) { errno = ENODEV; return -1; }
         return 0;
     }
+    int exposure(unsigned &code) {
+        unsigned high, low;
+        if (read(0x3e00, high) || pair(0x3e01, low)) return -1;
+        code = ((high & 0x0f) << 16) | low;
+        return 0;
+    }
     int snapshot(SensorTiming &timing) {
         unsigned high = 0, low = 0;
         if (pair(0x320c, timing.hts) || pair(0x320e, timing.vts) ||
@@ -66,6 +72,17 @@ int read_sensor_timing(unsigned port, SensorTiming &timing) {
         return -1;
     }
     return 0;
+}
+
+int read_sensor_exposure(unsigned port, unsigned &code) {
+    SensorBus bus;
+    if (bus.open(port)) return -errno;
+    for (unsigned attempt = 0; attempt < 3; ++attempt) {
+        unsigned before, after;
+        if (bus.exposure(before) || bus.exposure(after)) return -errno;
+        if (before == after) { code = after; return 0; }
+    }
+    return -EAGAIN;
 }
 
 int configure_sensor_trigger_readout(unsigned port) {
