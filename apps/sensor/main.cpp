@@ -86,7 +86,8 @@ int main(int argc, char **argv) {
         add(camera, "--record-mp4-dir", options.record_mp4_directory);
 
     std::vector<std::string> imu;
-    add(imu, "--sample-rate-hz", options.imu_sample_rate_hz);
+    add(imu, "--sample-rate-hz", options.imu_sample_rate_hz ?
+        std::to_string(options.imu_sample_rate_hz) : std::string("auto"));
     add(imu, "--print-rate-hz", options.imu_print_rate_hz);
     if (options.imu_print_metrics) imu.emplace_back("--print-metrics");
     if (!options.imu_udp_dest.empty()) add(imu, "--udp-dest", options.imu_udp_dest);

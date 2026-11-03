@@ -65,10 +65,14 @@ test-wifi:
 
 test-sync:
 	@mkdir -p .build
+	$(HOST_CXX) $(CXXFLAGS) -Itools tests/test_iio_discovery.cpp tools/validation.cpp -o .build/test-iio-discovery
+	.build/test-iio-discovery
 	$(HOST_CXX) $(CXXFLAGS) -Itools tests/test_validation.cpp tools/validation.cpp -o .build/test-validation
 	.build/test-validation
 	$(HOST_CXX) $(CXXFLAGS) -Itools tests/test_runtime.cpp tools/runtime.cpp tools/validation.cpp -o .build/test-runtime
 	.build/test-runtime
+	$(HOST_CXX) $(CXXFLAGS) -Itools tests/test_verify_iio.cpp tools/runtime.cpp tools/validation.cpp -o .build/test-verify-iio
+	.build/test-verify-iio
 	$(HOST_CXX) $(CXXFLAGS) -Itools tests/test_phase.cpp $(VERIFY_CORE) -o .build/test-phase
 	.build/test-phase
 	$(HOST_CXX) $(CXXFLAGS) -Itools $(VERIFY_SOURCES) -o .build/orbvi-verify

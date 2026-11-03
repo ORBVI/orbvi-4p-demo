@@ -55,24 +55,27 @@ SDK 两个时间戳保留原值；`received_ns` 是主机调用返回后的单�
 
 C++ 可执行程序负责相机采集，不自行驱动 FSYNC，也不包含 IMU 采集器。
 `orbvi-verify sync` 是 C++ 外触发与 IMU 的联合验收入口：相机验证最高 30 Hz，
-IMU 配置为 1 kHz、16 g、2000 dps，检查两路 IIO 数据中的 FSYNC 标记。
-重构不改变触发 GPIO、IIO 配置和验收判据，不引入 RTSP、ROS 或录包依赖。
+IMU 按驱动当前的 800–2000 Hz 采样率验收，量程至少为 16 g、2000 dps，检查 IIO 数据中的 FSYNC 标记。
+工具按通道能力查找设备，支持同一物理传感器的独立加速度/角速度设备或单个六轴设备，
+不依赖 IMU 型号；BSP 驱动仍须提供对应采样率、量程、FSYNC 通道和同步统计。
+驱动明确报告不支持 FSYNC 时直接失败，不把六轴数据可读视为同步通过。
 
 ## C++ 验证工具
 
 `tools/verify_main.cpp` 解析 `sync` / `board` / `shutdown` / `backpressure` 子命令。
 `tools/workflows.cpp` 编排板端流程，使用独立实时线程产生 GPIO417 脉冲；
-主线程读取两路 IIO，采集子进程仍运行 `orbvi-4p-demo`。
+主线程读取 IMU IIO 数据，采集子进程仍运行 `orbvi-4p-demo`。
 `tools/runtime.*` 封装子进程、IIO 配置与恢复、分片读取、CSV/RAW 校验和 JSON 写入。
 `tools/validation.*` 实现 scan layout 解码、采样连续性、持续排空的退出流程和逐项清理；
 `tools/phase.cpp` 按硬件时间戳划分阶段，检查帧数、FSYNC 及 IMU 采样。
 
-验证工具不依赖 X5 SDK，不调用解释器。启动 IIO 前先完成两路设备预检查，
+验证工具不依赖 X5 SDK，不调用解释器。启动 IIO 前先完成设备预检查，
 恢复时先关闭 buffer，再关闭描述符，恢复 length 和 scan 设置、watermark，最后恢复 enable。
 触发线程在清理 GPIO 前停止并 join；相机正常退出期间主线程继续读取 IMU。
 任何校验、清理或报告写入失败都不会输出最终 PASS。
 JSON 保持纳秒整数精度；报告为紧凑 JSON，新增 status/error/cleanup_errors 字段。
 背压报告的 samples 与同步诊断一致，使用带 device 字段的记录数组。
+背压验证要求加速度和角速度使用独立 buffer；单 buffer 六轴设备不执行该项验收。
 
 主机测试使用临时目录和 FIFO 验证真实非阻塞分片读取、单路暂停和配置恢复，
 不访问板端 GPIO/IIO。历史板测仍需在本次迁移后重新执行。

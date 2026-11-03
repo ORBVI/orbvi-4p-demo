@@ -16,6 +16,10 @@ int main() {
     auto row = layout.decode(data);
     assert(row.at("x") == -2 && row.at("y") == 0x1234);
     assert(row.at("timestamp") == 0x0102030405060708LL);
+    auto shifted = make_layout({{"signed", "le:s12/16>>4", 0}, {"unsigned", "be:u10/16>>2", 1}});
+    const uint8_t shifted_data[] = {0xe0,0xff,0x0a,0xac};
+    auto shifted_row = shifted.decode(shifted_data);
+    assert(shifted_row.at("signed") == -2 && shifted_row.at("unsigned") == 0x2ab);
     rejects([] { make_layout({{"x", "le:u7/7>>0", 0}}); });
     rejects([] { make_layout({{"x", "le:s16/16>>1", 0}}); });
     rejects([] { make_layout({{"x", "le:s128/128>>0", 0}}); });
@@ -25,6 +29,12 @@ int main() {
     for (int64_t i = 0; i < 1000; ++i) rows.push_back({{"in_timestamp", i*1000000}});
     auto rate = sampling(rows, 0, 1000000000);
     assert(rate.samples == 1000 && rate.hz == 1000 && rate.max_gap == 1000000);
+    std::vector<Row> rows800;
+    for (int64_t i = 0; i < 800; ++i) rows800.push_back({{"in_timestamp", i*1250000}});
+    assert(sampling(rows800, 0, 1000000000, 800).hz == 800);
+    rejects([&] { sampling(rows800, 0, 1000000000, 1000); });
+    rows800.erase(rows800.begin()+400);
+    rejects([&] { sampling(rows800, 0, 1000000000, 800); });
     auto missing = rows; missing.erase(missing.begin()+500);
     rejects([&] { sampling(missing, 0, 1000000000); });
     auto reversed = rows; reversed[500]["in_timestamp"] = 499000000;

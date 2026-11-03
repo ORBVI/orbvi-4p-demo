@@ -8,7 +8,7 @@ int main() {
     Options options;
     const char *basic[]{"imu_reader_demo"};
     assert(parse_options(1, basic, options) == 0);
-    assert(options.sample_rate_hz == 1000 && options.print_rate_hz == 10 && options.count == 0);
+    assert(options.sample_rate_hz == 0 && options.print_rate_hz == 10 && options.count == 0);
     assert(options.udp_dest.empty());
     assert(options.csv_path.empty());
     // std::ofstream::operator bool reflects stream errors, not whether it
@@ -32,7 +32,11 @@ int main() {
     assert(parse_options(3, bad_port, options) == 2);
     const char *bad_ipv6[]{"demo", "--udp-dest", "[::1]:12000"};
     assert(parse_options(3, bad_ipv6, options) == 2);
-    const char *bad[]{"demo", "--sample-rate-hz", "30"};
+    const char *new_rate[]{"demo", "--sample-rate-hz", "800"};
+    assert(parse_options(3, new_rate, options) == 0 && options.sample_rate_hz == 800);
+    const char *automatic[]{"demo", "--sample-rate-hz", "auto", "--print-rate-hz", "1000"};
+    assert(parse_options(5, automatic, options) == 0 && options.sample_rate_hz == 0);
+    const char *bad[]{"demo", "--sample-rate-hz", "2001"};
     assert(parse_options(3, bad, options) == 2);
 
     Sample sample{};

@@ -6,7 +6,9 @@ Json to_json(const Phase &p) {
     return Json::Object{{"name",p.name},{"start",p.start},{"end",p.end},{"pulses",std::move(pulses)}};
 }
 Json analyze_phase(const Phase &p, const std::array<std::vector<CsvRow>,4> &frames, const Iio &imu) {
-    require(p.end>p.start && imu.devices.size()==2,"Invalid phase or IMU devices");
+    bool accel=false,gyro=false;
+    for(const auto &device:imu.devices) {accel|=device.accel; gyro|=device.gyro;}
+    require(p.end>p.start && !imu.devices.empty() && imu.devices.size()<=2 && accel && gyro,"Invalid phase or IMU devices");
     std::array<std::vector<int64_t>,4> times;
     Json counts=Json::array(), markers, rates;
     for(size_t camera=0;camera<4;++camera) {
@@ -27,7 +29,7 @@ Json analyze_phase(const Phase &p, const std::array<std::vector<CsvRow>,4> &fram
         }
         require(tagged.size()==p.pulses.size(),p.name+": "+d.id+" FSYNC count mismatch");
         if(i==0) reference=tagged; else require(reference==tagged,"Accel/gyro FSYNC timestamp mismatch");
-        markers[d.id]=tagged.size(); rates[d.id]=to_json(sampling(d.rows,p.start,p.end));
+        markers[d.id]=tagged.size(); rates[d.id]=to_json(sampling(d.rows,p.start,p.end,d.nominal_hz));
     }
     Json result=Json::Object{{"phase",p.name},{"pulses",p.pulses.size()},{"camera_frames",std::move(counts)},
                             {"imu_markers",std::move(markers)},{"imu_sampling",std::move(rates)}};

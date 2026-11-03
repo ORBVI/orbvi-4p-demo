@@ -219,7 +219,7 @@ int run_sync(const std::string &runner,bool raw,unsigned seconds,const fs::path 
     Json result; result["raw_saved"]=raw;
     std::string error; std::vector<std::string> errors;
     try {
-        gpio.open(); imu.open();
+        imu.open(); gpio.open();
         std::vector<std::string> args{runner,"--mode","external","--frames","1000000","--timeout-ms","60000","--output",(root/"capture").string()};
         if(!raw) args.push_back("--discard");
         child.start(args,root/"capture.log");
@@ -228,14 +228,14 @@ int run_sync(const std::string &runner,bool raw,unsigned seconds,const fs::path 
             while(now_ns()<until) imu.drain(1);
         });
         phases.push_back(acquire_phase("settle",1000000000,imu,&child));
-        before=snapshot();
+        before=snapshot(imu);
         phases.push_back(acquire_phase("quiet_before",2000000000,imu,&child));
         phases.push_back(acquire_phase(raw ? "trigger_2hz" : "trigger_15hz",3000000000,imu,&child,&gpio,raw ? 2 : 15));
         phases.push_back(acquire_phase("quiet_middle",2000000000,imu,&child));
         phases.push_back(acquire_phase("trigger_30hz",int64_t(raw ? 1 : seconds)*1000000000,imu,&child,&gpio,30));
         phases.push_back(acquire_phase("quiet_after",2000000000,imu,&child));
         stop_capture([&]{child.signal(SIGINT);},[&]{return child.poll();},[&]{imu.drain(5);},
-                     [&]{imu.disable();},[&]{after=snapshot();});
+                     [&]{imu.disable();},[&]{after=snapshot(imu);});
         imu.drain(0);
         std::array<std::vector<CsvRow>,4> frames;
         for(size_t camera=0;camera<4;++camera) {
@@ -257,7 +257,8 @@ int run_sync(const std::string &runner,bool raw,unsigned seconds,const fs::path 
         for(const auto &p:phases) diagnostic["phases"].push(to_json(p));
         diagnostic["imu"]=imu.samples();
         // Preserve samples even if the stats directory becomes unavailable.
-        try {diagnostic["stats"]=to_json(snapshot());} catch(const std::exception &e) {diagnostic["stats_error"]=e.what(); errors.push_back(e.what());}
+        if(imu.devices.empty()) diagnostic["stats_error"]="IMU was not opened";
+        else try {diagnostic["stats"]=to_json(snapshot(imu));} catch(const std::exception &e) {diagnostic["stats_error"]=e.what(); errors.push_back(e.what());}
         write_json(root/"diagnostic.json",diagnostic);
     }}}));
     result["status"]=error.empty() && errors.empty() ? "PASS" : "FAIL";
@@ -275,27 +276,28 @@ int run_backpressure(const fs::path &output) {
     try {
         imu.open();
         auto phase=[&](const std::string &name,int64_t duration) {auto p=acquire_phase(name,duration,imu); phases.push_back(p); return p;};
+        auto &accel=imu.device_for(Iio::Role::accel); auto &gyro=imu.device_for(Iio::Role::gyro);
+        require(&accel!=&gyro,"Backpressure verification requires separate accelerometer and gyroscope buffers");
         auto warm=phase("warmup_both",1000000000);
-        auto before=snapshot(); snapshots["before_stall"]=to_json(before);
-        auto &accel=imu.device("icm42688-accel"); auto &gyro=imu.device("icm42688-gyro");
+        auto before=snapshot(imu); snapshots["before_stall"]=to_json(before);
         auto count=accel.rows.size(); accel.paused=true;
         auto stall=phase("accel_unread_gyro_drained",2000000000);
         require(accel.rows.size()==count,"Harness drained accel during stall");
-        auto stalled=snapshot(); snapshots["after_stall"]=to_json(stalled);
+        auto stalled=snapshot(imu); snapshots["after_stall"]=to_json(stalled);
         accel.paused=false;
         phase("resume_drain_settle",300000000);
-        auto recovering=snapshot(); snapshots["before_recovery"]=to_json(recovering);
+        auto recovering=snapshot(imu); snapshots["before_recovery"]=to_json(recovering);
         auto recovery=phase("recovery_both",1000000000);
         phase("final_drain_margin",50000000);
-        auto after=snapshot(); snapshots["after_recovery"]=to_json(after);
+        auto after=snapshot(imu); snapshots["after_recovery"]=to_json(after);
         imu.disable();
         auto stable=warm.end-500000000;
         for(const auto &d:imu.devices) {
-            checks["baseline"][d.name]=to_json(sampling(d.rows,stable,warm.end));
-            checks["recovery"][d.name]=to_json(sampling(d.rows,recovery.start,recovery.end));
+            checks["baseline"][d.name]=to_json(sampling(d.rows,stable,warm.end,d.nominal_hz));
+            checks["recovery"][d.name]=to_json(sampling(d.rows,recovery.start,recovery.end,d.nominal_hz));
         }
-        checks["gyro_during_stall"]=to_json(sampling(gyro.rows,stall.start,stall.end));
-        checks["gyro_entire_stable_capture"]=to_json(sampling(gyro.rows,stable,recovery.end));
+        checks["gyro_during_stall"]=to_json(sampling(gyro.rows,stall.start,stall.end,gyro.nominal_hz));
+        checks["gyro_entire_stable_capture"]=to_json(sampling(gyro.rows,stable,recovery.end,gyro.nominal_hz));
         int64_t dropped=std::stoll(stalled.at("dropped_sample_count"))-std::stoll(before.at("dropped_sample_count"));
         require(dropped>0,"Accel queue did not demonstrate actual backpressure"); checks["stalled_accel_drop_count"]=dropped;
         for(const auto &item:before) {

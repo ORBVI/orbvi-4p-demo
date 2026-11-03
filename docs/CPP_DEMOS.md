@@ -49,6 +49,15 @@ four `sensor_msgs/CompressedImage` topics and `/imu/data`. In this BSP-native
 implementation the compressed image `format` is `h264`; the reference package
 uses JPEG for bag images. `--record-frame-skip 1` applies only to bag recording.
 
+`imu_reader_demo` locates accelerometer and gyroscope channels through IIO
+capabilities, without matching an IMU model or device name. It supports either
+one six-axis device or separate devices belonging to the same physical sensor,
+and reads the scale and optional offset exposed by the driver. By default it
+selects the available common sampling rate closest to 1 kHz and reports the
+actual rate. An explicitly requested rate must be supported. The BSP must
+provide all six channels and timestamps; missing, ambiguous or already occupied
+devices are reported as errors.
+
 For free-running four-camera capture, use `--trigger-mode none --max-skew-ns 40000000` when the default 1 ms grouping window rejects frames. The 40 ms tolerance is **not** a 1 ms hardware synchronization guarantee. Validate all four decoded RTSP streams (`:554`–`:557/live/PRR`), not merely open ports. MP4 recording may need a short media-registration wait; a requested recording now fails visibly rather than continuing without a recorder.
 
 The new NV12/RTSP/recording path has host regression and ARM64 cross-build

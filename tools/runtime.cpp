@@ -160,25 +160,12 @@ void verify_raw(const fs::path &root, const CsvRow &row) {
 Iio::~Iio() { for(const auto &e:close()) std::cerr << "IIO cleanup: " << e << '\n'; }
 void Iio::open(const fs::path &sys, const fs::path &dev) {
     require(devices.empty(),"IIO already opened");
-    std::set<std::string> names;
-    std::vector<fs::path> paths;
-    for(const auto &entry:fs::directory_iterator(sys)) if(entry.path().filename().string().rfind("iio:device",0)==0) paths.push_back(entry.path());
-    std::sort(paths.begin(),paths.end());
-    for(const auto &path:paths) {
-        auto name=read_text(path/"name"); if(name!="icm42688-accel" && name!="icm42688-gyro") continue;
-        require(names.insert(name).second,"Ambiguous IIO device: "+name);
-        require(read_text(path/"buffer/enable")=="0",name+" buffer is busy");
-        bool gyro=name=="icm42688-gyro";
-        double odr=std::stod(read_text(path/"sampling_frequency"));
-        double scale=std::stod(read_text(path/(gyro ? "in_anglvel_scale" : "in_accel_scale")));
-        require(odr==1000 && std::abs(scale-(gyro ? 0.001065264 : 0.004788403))<1e-12,"Expected 1 kHz / 16 g / 2000 dps: "+name);
-        Device d; d.path=path; d.id=path.filename().string(); d.name=name;
-        devices.push_back(std::move(d));
-        configuration[path.filename().string()]=Json::Object{{"name",name},{"nominal_hz",odr},{"scale_si",scale},{"range",gyro ? "+/-2000 dps" : "+/-16 g"}};
-    }
-    require(devices.size()==2,"Expected separate ICM42688 accel and gyro devices");
-    // Complete validation and save every setting before the first mutation.
-    for(auto &d:devices) {
+    for(const auto &found:find_imu_devices(sys)) {
+        Device d; d.path=found.path; d.id=found.id; d.name=found.name;
+        d.accel=found.accel; d.gyro=found.gyro;
+        require(read_text(d.path/"buffer/enable")=="0",d.name+" buffer is busy");
+        auto fsync=d.path/"fsync_supported";
+        if(fs::exists(fsync)) require(read_text(fsync)=="1","IMU driver does not support FSYNC: "+d.name);
         std::vector<ScanEntry> entries;
         for(const auto &p:fs::directory_iterator(d.path/"scan_elements")) {
             auto name=p.path().filename().string(); if(name.size()<3 || name.substr(name.size()-3)!="_en") continue;
@@ -189,9 +176,42 @@ void Iio::open(const fs::path &sys, const fs::path &dev) {
         d.layout=make_layout(entries);
         for(const auto *required:{"in_timestamp","in_count0_fsync_event","in_count5_fsync_timestamp_ns"})
             require(std::any_of(entries.begin(),entries.end(),[&](const auto &e){return e.name==required;}),"Missing IIO field: "+std::string(required));
+        Json config=Json::Object{{"name",d.name},{"accel",d.accel},{"gyro",d.gyro}};
+        bool have_rate=false;
+        for(const auto &role:{std::pair{d.accel,std::string("in_accel")},std::pair{d.gyro,std::string("in_anglvel")}}) {
+            if(!role.first) continue;
+            bool gyro=role.second=="in_anglvel";
+            auto frequency=d.path/"sampling_frequency";
+            if(!fs::exists(frequency)) frequency=d.path/(role.second+"_sampling_frequency");
+            double rate=std::stod(read_text(frequency));
+            require(std::isfinite(rate) && rate>=800 && rate<=2000,"IMU sampling frequency must be 800..2000 Hz: "+d.name);
+            require(!have_rate || rate==d.nominal_hz,"IMU axes have different sampling frequencies: "+d.name);
+            d.nominal_hz=rate; have_rate=true;
+            double first_scale=0, first_range=0;
+            for(const auto *axis:{"x","y","z"}) {
+                auto name=role.second+"_"+axis;
+                auto field=std::find_if(d.layout.fields.begin(),d.layout.fields.end(),[&](const auto &item){return item.name==name;});
+                require(field!=d.layout.fields.end() && field->signed_value,"Missing signed IIO axis: "+name);
+                double scale=iio_axis_value(d.path,role.second,axis,"scale",NAN);
+                double range=scale*std::ldexp(1.0,int(field->bits)-1);
+                double expected=gyro ? 2000.0*std::acos(-1.0)/180.0 : 16.0*9.80665;
+                require(scale>0 && std::isfinite(range) && range>=expected*0.999 && range<=expected*4.001,
+                        "Expected at least +/-16 g / +/-2000 dps IIO range: "+name);
+                if(std::string(axis)=="x") {first_scale=scale; first_range=range;}
+            }
+            config[gyro ? "gyro_scale_si" : "accel_scale_si"]=first_scale;
+            config[gyro ? "gyro_range_rps" : "accel_range_mps2"]=first_range;
+            if(d.accel != d.gyro) {
+                config["scale_si"]=first_scale;
+            }
+        }
+        config["nominal_hz"]=d.nominal_hz;
+        if(!devices.empty()) require(devices.front().nominal_hz==d.nominal_hz,"IMU devices have different sampling frequencies");
         for(const auto *setting:{"buffer/length","buffer/enable","buffer/watermark"}) {
             auto path=d.path/setting; if(fs::exists(path)) d.settings[path]=read_text(path);
         }
+        configuration[d.id]=std::move(config);
+        devices.push_back(std::move(d));
     }
     for(auto &d:devices) {
         d.saved=true;
@@ -240,17 +260,30 @@ std::vector<std::string> Iio::close() {
     }
     return cleanup_all(actions);
 }
-Iio::Device &Iio::device(const std::string &name) {
-    for(auto &d:devices) if(d.name==name) return d;
-    throw std::runtime_error("Missing IIO device "+name);
+Iio::Device &Iio::device_for(Role role) {
+    for(auto &d:devices) if(role==Role::accel ? d.accel : d.gyro) return d;
+    throw std::runtime_error("Missing IIO device for requested role");
 }
 Json Iio::samples() const {
     Json result=Json::array();
     for(const auto &d:devices) for(const auto &row:d.rows) {auto j=to_json(row); j["device"]=d.id; result.push(std::move(j));}
     return result;
 }
-Stats snapshot() {
-    Stats result; for(const auto &p:fs::directory_iterator("/sys/bus/spi/devices/spi2.0/sync_stats")) result[p.path().filename().string()]=read_text(p.path()); return result;
+Stats snapshot(const Iio &imu) {
+    fs::path stats;
+    for(const auto &device:imu.devices) {
+        fs::path current=fs::canonical(device.path).parent_path(), found;
+        while(!current.empty()) {
+            if(fs::is_directory(current/"sync_stats")) { found=current/"sync_stats"; break; }
+            if(current==current.root_path()) break;
+            current=current.parent_path();
+        }
+        require(!found.empty(),"IMU driver does not provide sync_stats: "+device.id);
+        require(stats.empty() || fs::equivalent(stats,found),"IMU devices do not share sync_stats");
+        stats=found;
+    }
+    require(!stats.empty(),"No IMU device for sync_stats");
+    Stats result; for(const auto &p:fs::directory_iterator(stats)) result[p.path().filename().string()]=read_text(p.path()); return result;
 }
 void check_counters(const Stats &before, const Stats &after, bool drops) {
     for(const auto *key:{"timestamp_reset_count","spi_error_count","fifo_overflow_count","fifo_lost_packet_count","fifo_parse_error_count"})

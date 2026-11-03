@@ -39,11 +39,20 @@ int main(int argc, char **argv) {
     // Preflight both sensors before changing either. No real sysfs is touched.
     for (int i=0; i<2; ++i) {
         auto d=root/("iio:device"+std::to_string(i)); fs::create_directories(d/"buffer");
-        write_text(d/"name", i ? "icm42688-gyro" : "icm42688-accel");
+        write_text(d/"name", i ? "test-gyro" : "test-accel");
         write_text(d/"buffer/enable", i ? "1" : "0");
         write_text(d/"buffer/length", "77");
+        write_text(d/"buffer/watermark", "5");
         write_text(d/"sampling_frequency", "1000");
         write_text(d/(i ? "in_anglvel_scale" : "in_accel_scale"), i ? "0.001065264" : "0.004788403");
+        fs::create_directory(d/"scan_elements");
+        std::vector<std::string> fields{"in_count0_fsync_event","in_count5_fsync_timestamp_ns","in_timestamp"};
+        for(const auto *axis:{"x","y","z"}) fields.push_back(std::string(i ? "in_anglvel_" : "in_accel_")+axis);
+        for(size_t n=0;n<fields.size();++n) {
+            write_text(d/"scan_elements"/(fields[n]+"_en"),"0");
+            write_text(d/"scan_elements"/(fields[n]+"_index"),std::to_string(n));
+            write_text(d/"scan_elements"/(fields[n]+"_type"),n<3 ? "le:s64/64>>0" : "le:s16/16>>0");
+        }
     }
     Iio busy; rejects([&]{busy.open(root,root);}); busy.close();
     assert(read_text(root/"iio:device0/buffer/length")=="77");
@@ -53,26 +62,21 @@ int main(int argc, char **argv) {
     fs::create_directory(root/"dev");
     int writers[2];
     for(int i=0;i<2;++i) {
-        auto id="iio:device"+std::to_string(i); auto d=root/id;
-        fs::create_directory(d/"scan_elements");
-        std::vector<std::string> fields{"in_count0_fsync_event","in_count5_fsync_timestamp_ns","in_timestamp"};
-        for(size_t n=0;n<fields.size();++n) {
-            write_text(d/"scan_elements"/(fields[n]+"_en"),"0");
-            write_text(d/"scan_elements"/(fields[n]+"_index"),std::to_string(n));
-            write_text(d/"scan_elements"/(fields[n]+"_type"),"le:s64/64>>0");
-        }
-        write_text(d/"buffer/watermark","5");
+        auto id="iio:device"+std::to_string(i);
         assert(mkfifo((root/"dev"/id).c_str(),0600)==0);
         writers[i]=::open((root/"dev"/id).c_str(),O_RDWR|O_NONBLOCK|O_CLOEXEC); assert(writers[i]>=0);
     }
     Iio streaming; streaming.open(root,root/"dev");
-    uint8_t scan[24]={1}; scan[8]=42; scan[16]=99;
+    fs::create_directory(root/"sync_stats");
+    write_text(root/"sync_stats/fifo_overflow_count","0");
+    assert(snapshot(streaming).at("fifo_overflow_count")=="0");
+    uint8_t scan[32]={1}; scan[8]=42; scan[16]=99;
     assert(::write(writers[0],scan,7)==7); streaming.drain(0);
     assert(streaming.devices[0].rows.empty() && streaming.devices[0].pending.size()==7);
-    assert(::write(writers[0],scan+7,17)==17); streaming.drain(0);
+    assert(::write(writers[0],scan+7,25)==25); streaming.drain(0);
     assert(streaming.devices[0].rows.size()==1 && streaming.devices[0].rows[0].at("in_timestamp")==99);
     streaming.devices[0].paused=true;
-    assert(::write(writers[0],scan,24)==24 && ::write(writers[1],scan,24)==24);
+    assert(::write(writers[0],scan,32)==32 && ::write(writers[1],scan,32)==32);
     streaming.drain(0);
     assert(streaming.devices[0].rows.size()==1 && streaming.devices[1].rows.size()==1);
     streaming.devices[0].paused=false; streaming.drain(0);
