@@ -53,11 +53,13 @@ std::vector<CsvRow> read_csv(const fs::path &);
 void verify_raw(const fs::path &, const CsvRow &);
 class Iio {
 public:
+    enum class Role { accel, gyro };
     struct Device {
         fs::path path;
         std::string name, id;
         int fd = -1;
-        bool paused = false, saved = false;
+        bool accel = false, gyro = false, paused = false, saved = false;
+        double nominal_hz = 1000;
         Layout layout;
         std::map<fs::path, std::string> settings;
         std::vector<uint8_t> pending;
@@ -73,11 +75,11 @@ public:
     void drain(int timeout_ms);
     void disable();
     std::vector<std::string> close();
-    Device &device(const std::string &name);
+    Device &device_for(Role role);
     Json samples() const;
 };
 using Stats = std::map<std::string, std::string>;
-Stats snapshot();
+Stats snapshot(const Iio &imu);
 Json to_json(const Stats &);
 void check_counters(const Stats &, const Stats &, bool include_drops = true);
 }

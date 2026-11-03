@@ -59,7 +59,7 @@ int load_yaml(const std::string &path, Options &options) {
         output << "# sensor_demo YAML config. Command-line options override this file.\n"
                   "camera:\n  width: 1280\n  height: 1088\n  fps: 30\n  rotate: 0\n"
                   "rtsp:\n  bps: 4000\n  codec: h264\n  url: /live/PRR\n"
-                  "imu:\n  sample_rate_hz: 1000\n  print_rate_hz: 10\n  print_metrics: false\n"
+                  "imu:\n  sample_rate_hz: auto\n  print_rate_hz: 10\n  print_metrics: false\n"
                   "  # udp_dest: 192.168.1.100:5600\n"
                   "save_data:\n  save: false\n  format: mp4\n"
                   "  save_path: /root/demo/save_mp4/\n  skip: false\n";
@@ -104,7 +104,8 @@ int load_yaml(const std::string &path, Options &options) {
             if (value.empty() || value.front() != '/') return -1;
             options.camera.url = value;
         } else if (key == "imu.sample_rate_hz") {
-            if (!unsigned_number(value, 1, 2000, options.imu_sample_rate_hz)) return -1;
+            if (value == "auto") options.imu_sample_rate_hz = 0;
+            else if (!unsigned_number(value, 1, 2000, options.imu_sample_rate_hz)) return -1;
         } else if (key == "imu.print_rate_hz") {
             if (!unsigned_number(value, 0, 2000, options.imu_print_rate_hz)) return -1;
         } else if (key == "imu.print_metrics") {
@@ -154,7 +155,7 @@ int parse_options(int argc, const char *const *argv, const std::string &config_p
         if (++i == argc) return 2;
         const std::string value = argv[i]; unsigned number = 0;
         if (arg == "--sample-rate-hz") {
-            if (!unsigned_number(value, 1, 2000, number)) return 2;
+            if (value != "auto" && !unsigned_number(value, 1, 2000, number)) return 2;
             options.imu_sample_rate_hz = number;
         } else if (arg == "--print-rate-hz") {
             if (!unsigned_number(value, 0, 2000, number)) return 2;
@@ -185,8 +186,7 @@ int parse_options(int argc, const char *const *argv, const std::string &config_p
     camera_argv.clear(); for (const auto &item : merged) camera_argv.push_back(item.c_str());
     if (camera::parse_options(static_cast<int>(camera_argv.size()), camera_argv.data(), parsed_camera)) return 2;
     options.camera = std::move(parsed_camera);
-    const std::set<unsigned> imu_rates{25, 50, 100, 200, 500, 1000, 2000};
-    if (!imu_rates.count(options.imu_sample_rate_hz) || options.imu_print_rate_hz > options.imu_sample_rate_hz)
+    if (options.imu_sample_rate_hz && options.imu_print_rate_hz > options.imu_sample_rate_hz)
         return 2;
     if (!options.record_bag_path.empty() && !options.record_mp4_directory.empty()) return 2;
     if (!options.record_bag_path.empty() && options.camera.codec != camera::Codec::H264) return 2;
@@ -200,7 +200,7 @@ int parse_options(int argc, const char *const *argv, const std::string &config_p
 void print_usage() {
     camera::print_usage();
     std::puts("sensor_demo additions:\n"
-              "  --sample-rate-hz HZ\n"
+              "  --sample-rate-hz auto|HZ\n"
               "  --print-rate-hz HZ\n"
               "  --print-metrics\n"
               "  --udp-dest IPv4:PORT (disabled by default)\n"

@@ -7,7 +7,7 @@
 namespace orbvi::sensor {
 struct Options {
     camera::Options camera;
-    unsigned imu_sample_rate_hz = 1000;
+    unsigned imu_sample_rate_hz = 0;
     unsigned imu_print_rate_hz = 10;
     bool imu_print_metrics = false;
     std::string imu_udp_dest;

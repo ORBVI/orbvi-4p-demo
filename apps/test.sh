@@ -18,6 +18,8 @@ $cxx $flags -pthread apps/timesync/main.cpp apps/timesync/time_sync.cpp -o .buil
 python3 tests/test_timesync_cli.py .build/timesync-demo-cli
 $cxx $flags -Iapps/imu -Itools tests/test_imu_demo.cpp apps/imu/imu_reader.cpp apps/imu/imu_wire.cpp tools/validation.cpp -o .build/test-imu-demo
 .build/test-imu-demo
+$cxx $flags -Iapps/imu -Itools tests/test_imu_iio.cpp apps/imu/imu_reader.cpp apps/imu/imu_wire.cpp tools/validation.cpp -o .build/test-imu-iio
+.build/test-imu-iio
 $cxx $flags -Iapps/imu tests/test_imu_wire.cpp apps/imu/imu_wire.cpp -o .build/test-imu-wire
 .build/test-imu-wire
 $cxx $flags -Iapps/sensor -Iapps/camera tests/test_sensor_options.cpp apps/sensor/sensor_options.cpp apps/camera/camera_options.cpp -o .build/test-sensor-options

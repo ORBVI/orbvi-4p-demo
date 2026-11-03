@@ -48,6 +48,7 @@ int main() {
     const char *defaults[]{"sensor_demo"};
     assert(parse_options(1, defaults, generated, options) == 0);
     assert(std::filesystem::exists(generated));
+    assert(options.imu_sample_rate_hz == 0);
     assert(options.imu_udp_dest.empty() && !options.camera.read_exposure);
     assert(std::filesystem::remove(generated));
     assert(std::filesystem::remove(generated.parent_path()));

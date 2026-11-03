@@ -6,7 +6,7 @@ int main() {
     Phase p{"trigger",0,1000000000,{10000000}};
     Iio imu;
     for(int d=0;d<2;++d) {
-        Iio::Device device; device.id=std::to_string(d);
+        Iio::Device device; device.id=std::to_string(d); device.accel=d==0; device.gyro=d==1;
         for(int64_t i=0;i<1000;++i) device.rows.push_back({{"in_timestamp",i*1000000},
             {"in_count0_fsync_event",i==10},{"in_count5_fsync_timestamp_ns",i==10 ? 10000000 : 0}});
         imu.devices.push_back(std::move(device));
@@ -14,6 +14,10 @@ int main() {
     std::array<std::vector<CsvRow>,4> frames;
     for(auto &rows:frames) rows.push_back({{"sdk_timestamp","20000000"}});
     auto result=analyze_phase(p,frames,imu); (void)result;
+    Iio combined;
+    combined.devices.push_back(imu.devices[0]);
+    combined.devices[0].gyro=true;
+    analyze_phase(p,frames,combined);
     frames[0].clear(); rejects([&]{analyze_phase(p,frames,imu);});
     frames[0].push_back({{"sdk_timestamp","60000000"}}); rejects([&]{analyze_phase(p,frames,imu);});
     frames[0][0]["sdk_timestamp"]="20000000";
