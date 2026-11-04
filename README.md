@@ -12,7 +12,7 @@
 
 ## 使用文档
 
-编译、部署、板内演示及与 SDK / ROS 2 的配合使用，请按 [ORBVI 4P 使用指南](https://huanshizhineng.feishu.cn/wiki/GoeUwlTiRiaY5skses2crmPFnCg?fromScene=spaceOverview) 操作。
+编译、部署、板内演示及与 SDK / ROS 2 的配合使用，请按 [ORBVI 4P 使用指南](https://huanshizhineng.feishu.cn/wiki/RxH8wzbVgioHgXk5GqEcy67Uned) 操作。
 
 ## UART/PPS 授时
 
