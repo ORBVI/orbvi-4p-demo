@@ -10,7 +10,7 @@ mkdir -p dist/bin
   -Iapps/reference_images -Inv12 -I"$headers" \
   apps/reference_images/main.cpp apps/reference_images/protocol.cpp \
   apps/reference_images/nv12_planes.cpp apps/reference_images/jpeg_codec.cpp \
-  nv12/x5_camera.cpp -L"$sdk/lib" -L"$sys_lib" \
+  nv12/x5_camera.cpp src/sensor_timing.cpp -L"$sdk/lib" -L"$sys_lib" \
   -Wl,-rpath-link,"$sdk/lib" -Wl,-rpath-link,"$sys_lib" \
   -lcam -lvpf -lhbmem -lmultimedia -lalog -ldl -lrt -lpthread \
   -static-libstdc++ -static-libgcc -Wl,-rpath,/usr/hobot/lib \
