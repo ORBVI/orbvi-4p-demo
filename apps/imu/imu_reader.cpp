@@ -128,6 +128,8 @@ int run(const Options &options, const fs::path &sys, const fs::path &dev) {
     std::vector<Device> devices;
     try {
         stopped = 0;
+        struct sigaction action{}; action.sa_handler = stop; sigemptyset(&action.sa_mask);
+        sigaction(SIGINT, &action, nullptr); sigaction(SIGTERM, &action, nullptr);
         std::unique_ptr<UdpPublisher> udp;
         if (!options.udp_dest.empty()) {
             UdpEndpoint endpoint;
@@ -205,8 +207,6 @@ int run(const Options &options, const fs::path &sys, const fs::path &dev) {
         }
         for (auto &device : devices) write_text(device.path / "buffer/enable", "1");
         std::cout << "SENSOR_IMU_CONFIG sample_rate_hz=" << sample_rate << '\n';
-        struct sigaction action{}; action.sa_handler = stop; sigemptyset(&action.sa_mask);
-        sigaction(SIGINT, &action, nullptr); sigaction(SIGTERM, &action, nullptr);
         uint64_t emitted = 0, next_print = 0;
         int64_t first_timestamp = 0, last_timestamp = 0;
         const size_t accel_index = 0;

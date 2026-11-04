@@ -28,6 +28,7 @@ int parse_options(int argc, const char *const *argv, Options &options) {
         if (!strcmp(arg, "--help") || !strcmp(arg, "-h")) return 1;
         if (!strcmp(arg, "--read-exposure")) { options.read_exposure = true; continue; }
         if (!strcmp(arg, "--diagnostics")) { options.diagnostics = true; continue; }
+        if (!strcmp(arg, "--external-sync")) { options.external_sync = true; continue; }
         if (!strcmp(arg, "--trigger-mode")) {
             if (++i == argc || (strcmp(argv[i], "software_gpio") && strcmp(argv[i], "none"))) return 2;
             options.trigger_mode = argv[i];
@@ -110,6 +111,8 @@ int parse_options(int argc, const char *const *argv, Options &options) {
         (options.width == 480 && options.height == 720) ||
         (options.width == 720 && options.height == 1280);
     if (!supported_size || (options.rotate == 180 && options.fps != 30)) return 2;
+    if (options.external_sync && (options.fps != 30 || options.codec != Codec::H264 ||
+                                  options.trigger_mode != "software_gpio")) return 2;
     return 0;
 }
 void print_usage() {
@@ -131,6 +134,7 @@ void print_usage() {
          "  --diag-interval-ms N   Diagnostics interval (default: 1000)\n"
          "  --max-skew-ns N        Four-camera grouping threshold\n"
          "  --trigger-mode software_gpio|none  GPIO417 IMU FSYNC output\n"
+         "  --external-sync        Trigger cameras and IMU from GPIO417 at 30 Hz (H.264 only)\n"
          "  --frame-timeout-ms N   Frame timeout");
 }
 }

@@ -27,6 +27,8 @@ int main() {
     assert(options.imu_sample_rate_hz == 500 && options.imu_print_rate_hz == 25);
     assert(options.imu_print_metrics && options.record_mp4_directory == "/data/run");
     assert(options.imu_udp_dest == "127.0.0.1:5600");
+    const char *external[]{"sensor_demo", "--external-sync", "--fps", "30", "--codec", "h264"};
+    assert(parse_options(6, external, path, options) == 0 && options.camera.external_sync);
     const char *exposure[]{"sensor_demo", "--read-exposure"};
     assert(parse_options(2, exposure, path, options) == 0 && options.camera.read_exposure);
     const char *override_dest[]{"sensor_demo", "--udp-dest", "192.168.1.100:5601"};

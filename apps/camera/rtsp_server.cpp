@@ -55,7 +55,7 @@ int RtspServer::open() {
     return 0;
 }
 
-int RtspServer::push(const void *data, size_t size, uint64_t timestamp_ns) {
+int RtspServer::push(const void *data, size_t size, uint64_t timestamp_ns, const FrameMetadata *metadata) {
     auto &state = *state_;
     if (!state.media || !data || !size || state.record_failed) return -1;
     if (!state.record_directory.empty() && state.codec != Codec::H264) {
@@ -63,6 +63,16 @@ int RtspServer::push(const void *data, size_t size, uint64_t timestamp_ns) {
                      state.port, state.path.c_str());
         state.record_failed = true;
         return -1;
+    }
+    if (metadata) {
+        if (state.codec != Codec::H264 || metadata->timestamp_ns != timestamp_ns) return -1;
+        const auto sei = frame_metadata_sei(*metadata);
+        mk_frame meta_frame = mk_frame_create(MKCodecH264, timestamp_ns / 1000000, timestamp_ns / 1000000,
+                                              reinterpret_cast<const char *>(sei.data()), sei.size(), nullptr, nullptr);
+        if (!meta_frame) return -1;
+        const int accepted = mk_media_input_frame(state.media, meta_frame);
+        mk_frame_unref(meta_frame);
+        if (accepted != 1) return -1;
     }
     mk_frame frame = mk_frame_create(state.codec == Codec::H264 ? MKCodecH264 : MKCodecH265,
                                      timestamp_ns / 1000000, timestamp_ns / 1000000,

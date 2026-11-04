@@ -84,15 +84,22 @@ int main(int argc, char **argv) {
         timestamp_index << "timestamp_ns,encoded_bytes\n";
     }
     nv12::X5Camera source(static_cast<unsigned>(options.camera_id), options.fps,
-                          source_width, source_height, false, 0, false, options.read_exposure);
+                          source_width, source_height, options.external_sync, 0, false, options.read_exposure);
     camera::RtspServer server(options.rtsp_base_port + static_cast<unsigned>(options.camera_id),
                               options.url, options.codec, camera_record_directory);
     camera::Options encoder_options = options;
     encoder_options.rotate = (90 + options.rotate) % 360; // Sensor is mounted portrait; API rotation is relative to standard view.
     uint64_t spool_sequence = 0;
+    camera::FrameMetadata pending_metadata{};
+    bool metadata_pending = false;
     camera::Encoder encoder(source_width, source_height, encoder_options,
         [&](const void *data, size_t size, uint64_t timestamp) {
-            const int status = server.push(data, size, timestamp);
+            if (options.external_sync && (!metadata_pending || !timestamp || timestamp != pending_metadata.timestamp_ns)) {
+                std::fprintf(stderr, "camera%d: encoder PTS does not match the captured frame\n", options.camera_id);
+                return -1;
+            }
+            const int status = server.push(data, size, timestamp, options.external_sync ? &pending_metadata : nullptr);
+            metadata_pending = false;
             if (status) return status;
             if (timestamp_index.is_open()) {
                 timestamp_index << timestamp << ',' << size << '\n';
@@ -112,9 +119,12 @@ int main(int argc, char **argv) {
             ++spool_sequence;
             return 0;
         });
-    if (!source.prepare() && !server.open() && !encoder.open() && !source.start()) {
+    if (!source.prepare() && !server.open() && !encoder.open() &&
+        (!options.external_sync || (group && camera::wait_for_start(*group, options.camera_id))) && !source.start()) {
         result = 0;
-        uint64_t frames = 0;
+        uint64_t frames = 0, acquired_frames = 0, source_gaps = 0, group_drops = 0;
+        uint32_t previous_id = 0;
+        bool have_previous_id = false;
         while (!stopped) {
             nv12::Frame frame;
             int acquired = source.acquire(frame, options.frame_timeout_ms);
@@ -124,8 +134,16 @@ int main(int argc, char **argv) {
                 result = 1;
                 break;
             }
+            ++acquired_frames;
+            if (have_previous_id) {
+                const uint32_t advance = frame.id - previous_id;
+                if (advance > 1 && advance < 0x80000000u) source_gaps += advance - 1;
+                else if (advance != 1) std::fprintf(stderr, "camera%d: frame id discontinuity %u -> %u\n",
+                                                    options.camera_id, previous_id, frame.id);
+            }
+            previous_id = frame.id; have_previous_id = true;
             bool grouped = true;
-            if (group) {
+            if (group && !options.external_sync) {
                 bool fresh = true;
                 while (true) {
                     bool accepted_leader = false;
@@ -139,6 +157,7 @@ int main(int argc, char **argv) {
                     if (decision == camera::GroupDecision::Hold) continue;
                     if (decision == camera::GroupDecision::Drop) {
                         if (source.release()) result = 1;
+                        ++group_drops;
                         grouped = false; break;
                     }
                     if (decision == camera::GroupDecision::Stop) {
@@ -151,15 +170,28 @@ int main(int argc, char **argv) {
             camera::Nv12View view{static_cast<const unsigned char *>(frame.y),
                                   static_cast<const unsigned char *>(frame.uv), frame.width,
                                   frame.height, frame.stride, frame.vstride};
+            if (options.external_sync) {
+                pending_metadata = {static_cast<uint8_t>(options.camera_id), frame.id, frame.timestamp_ns};
+                metadata_pending = true;
+            }
             if (encoder.encode(view, frame.timestamp_ns)) result = 1;
+            if (options.external_sync && metadata_pending) result = 1;
             if (source.release()) result = 1;
             if (result) break;
             ++frames;
             if (options.diagnostics && frames % std::max(1u, options.fps * options.diag_interval_ms / 1000) == 0)
-                std::printf("camera%d: frames=%llu timestamp_ns=%llu\n", options.camera_id,
+                std::printf("camera%d: acquired=%llu encoded=%llu source_gaps=%llu group_drops=%llu frame_id=%u timestamp_ns=%llu\n", options.camera_id,
+                            static_cast<unsigned long long>(acquired_frames),
                             static_cast<unsigned long long>(frames),
+                            static_cast<unsigned long long>(source_gaps),
+                            static_cast<unsigned long long>(group_drops), frame.id,
                             static_cast<unsigned long long>(frame.timestamp_ns));
         }
+        if (options.external_sync)
+            std::printf("camera%d: final acquired=%llu encoded=%llu source_gaps=%llu group_drops=%llu\n",
+                        options.camera_id, static_cast<unsigned long long>(acquired_frames),
+                        static_cast<unsigned long long>(frames), static_cast<unsigned long long>(source_gaps),
+                        static_cast<unsigned long long>(group_drops));
     }
     if (group) camera::stop_group(*group);
     if (source.close()) result = 1;

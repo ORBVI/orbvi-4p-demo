@@ -16,12 +16,17 @@ struct SharedFrameGroup {
     uint64_t seen_generation[4];
     uint64_t max_skew_ns;
     unsigned camera_mask;
+    unsigned startup_ready_mask;
+    bool startup_released;
     bool stopped;
 };
 
 int initialize_group(SharedFrameGroup &group, unsigned camera_mask, uint64_t max_skew_ns);
 GroupDecision wait_for_group(SharedFrameGroup &group, unsigned camera_id,
                              uint64_t timestamp_ns, bool new_frame, bool *accepted_leader = nullptr);
+bool wait_for_start(SharedFrameGroup &group, unsigned camera_id);
+bool all_cameras_ready(SharedFrameGroup &group);
+void release_start(SharedFrameGroup &group);
 void stop_group(SharedFrameGroup &group);
 void destroy_group(SharedFrameGroup &group);
 }

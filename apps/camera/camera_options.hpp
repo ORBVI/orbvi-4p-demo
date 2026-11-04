@@ -28,6 +28,7 @@ struct Options {
     unsigned record_frame_skip = 0;
     bool diagnostics = false;
     bool read_exposure = false;
+    bool external_sync = false;
 };
 int parse_options(int argc, const char *const *argv, Options &options);
 void print_usage();

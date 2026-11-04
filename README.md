@@ -18,6 +18,10 @@
 
 `timesync_demo` 0.1.1 默认自动接收 ZDA/RMC，无需按工装选择协议。默认只读，`--apply` 才允许调钟。接线与使用方法见 [授时 Demo 说明](docs/TIMESYNC_DEMO.md)。
 
+## 相机与 IMU 触发同步
+
+联合验收命令、实时输出、RAW 保存及时间戳边界见 [相机与 IMU 同步验收](docs/CAMERA_IMU_SYNC.md)。
+
 ## 外触发测试开发
 
 四路 Trig-Readout 60fps 采集及 4P 与接收设备直连的 RTSP 演示，见 [60fps 使用说明](docs/CAMERA_TRIGGER_60FPS.md)。

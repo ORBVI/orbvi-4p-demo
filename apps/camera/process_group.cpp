@@ -70,6 +70,32 @@ GroupDecision wait_for_group(SharedFrameGroup &group, unsigned camera_id,
     return result;
 }
 
+bool wait_for_start(SharedFrameGroup &group, unsigned camera_id) {
+    if (camera_id >= 4 || !(group.camera_mask & (1u << camera_id))) return false;
+    pthread_mutex_lock(&group.mutex);
+    group.startup_ready_mask |= 1u << camera_id;
+    pthread_cond_broadcast(&group.condition);
+    while (!group.stopped && !group.startup_released)
+        pthread_cond_wait(&group.condition, &group.mutex);
+    const bool ready = !group.stopped;
+    pthread_mutex_unlock(&group.mutex);
+    return ready;
+}
+
+bool all_cameras_ready(SharedFrameGroup &group) {
+    pthread_mutex_lock(&group.mutex);
+    const bool ready = !group.stopped && group.startup_ready_mask == group.camera_mask;
+    pthread_mutex_unlock(&group.mutex);
+    return ready;
+}
+
+void release_start(SharedFrameGroup &group) {
+    pthread_mutex_lock(&group.mutex);
+    group.startup_released = true;
+    pthread_cond_broadcast(&group.condition);
+    pthread_mutex_unlock(&group.mutex);
+}
+
 void stop_group(SharedFrameGroup &group) {
     pthread_mutex_lock(&group.mutex); group.stopped = true;
     pthread_cond_broadcast(&group.condition); pthread_mutex_unlock(&group.mutex);
