@@ -91,7 +91,8 @@ void session_tests() {
 
 namespace orbvi::nv12 {
 struct X5Camera::State {};
-X5Camera::X5Camera(unsigned, unsigned, unsigned, unsigned) : state_(new State) {}
+X5Camera::X5Camera(unsigned, unsigned, unsigned, unsigned, bool, unsigned, bool, bool)
+    : state_(new State) {}
 X5Camera::~X5Camera() = default;
 int X5Camera::prepare() { ++prepares; return 0; }
 int X5Camera::start() { return 0; }
