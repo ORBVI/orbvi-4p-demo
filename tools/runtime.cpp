@@ -165,7 +165,17 @@ void Iio::open(const fs::path &sys, const fs::path &dev) {
         d.accel=found.accel; d.gyro=found.gyro;
         require(read_text(d.path/"buffer/enable")=="0",d.name+" buffer is busy");
         auto fsync=d.path/"fsync_supported";
-        if(fs::exists(fsync)) require(read_text(fsync)=="1","IMU driver does not support FSYNC: "+d.name);
+        Json config=Json::Object{{"name",d.name},{"accel",d.accel},{"gyro",d.gyro}};
+        const auto source=d.path/"timestamp_source";
+        const auto clock=d.path/"current_timestamp_clock";
+        config["timestamp_source"]=fs::exists(source) ? read_text(source) : "unspecified";
+        config["timestamp_clock"]=fs::exists(clock) ? read_text(clock) : "unspecified";
+        config["fsync_supported"]=fs::exists(fsync) ? read_text(fsync) : "unspecified";
+        configuration[d.id]=config;
+        if(fs::exists(fsync)) require(read_text(fsync)=="1",
+            "FSYNC verification unavailable: "+d.id+" ("+d.name+") reports fsync_supported="+read_text(fsync));
+        if(fs::exists(clock)) require(read_text(clock)=="monotonic",
+            "IMU timestamp clock must be monotonic for camera association: "+d.id);
         std::vector<ScanEntry> entries;
         for(const auto &p:fs::directory_iterator(d.path/"scan_elements")) {
             auto name=p.path().filename().string(); if(name.size()<3 || name.substr(name.size()-3)!="_en") continue;
@@ -176,7 +186,6 @@ void Iio::open(const fs::path &sys, const fs::path &dev) {
         d.layout=make_layout(entries);
         for(const auto *required:{"in_timestamp","in_count0_fsync_event","in_count5_fsync_timestamp_ns"})
             require(std::any_of(entries.begin(),entries.end(),[&](const auto &e){return e.name==required;}),"Missing IIO field: "+std::string(required));
-        Json config=Json::Object{{"name",d.name},{"accel",d.accel},{"gyro",d.gyro}};
         bool have_rate=false;
         for(const auto &role:{std::pair{d.accel,std::string("in_accel")},std::pair{d.gyro,std::string("in_anglvel")}}) {
             if(!role.first) continue;

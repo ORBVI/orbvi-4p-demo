@@ -36,5 +36,12 @@ int main() {
     const char *diagnostics_only[]{"cam_demo", "--diagnostics"};
     assert(parse_options(2, diagnostics_only, options) == 0);
     assert(options.diagnostics && !options.read_exposure);
-
+    const char *external[]{"cam_demo", "--external-sync"};
+    assert(parse_options(2, external, options) == 0 && options.external_sync);
+    const char *external_bad_fps[]{"cam_demo", "--external-sync", "--fps", "60"};
+    assert(parse_options(4, external_bad_fps, options) == 2);
+    const char *external_bad_codec[]{"cam_demo", "--external-sync", "--codec", "h265"};
+    assert(parse_options(4, external_bad_codec, options) == 2);
+    const char *external_bad_trigger[]{"cam_demo", "--external-sync", "--trigger-mode", "none"};
+    assert(parse_options(4, external_bad_trigger, options) == 2);
 }

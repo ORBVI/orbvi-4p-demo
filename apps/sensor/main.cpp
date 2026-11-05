@@ -78,6 +78,7 @@ int main(int argc, char **argv) {
     add(camera, "--trigger-mode", options.camera.trigger_mode);
     if (options.camera.diagnostics) camera.emplace_back("--diagnostics");
     if (options.camera.read_exposure) camera.emplace_back("--read-exposure");
+    if (options.camera.external_sync) camera.emplace_back("--external-sync");
     if (!options.record_bag_path.empty()) {
         add(camera, "--record-h264-dir", bag_spool.string());
         add(camera, "--record-frame-skip", options.record_frame_skip);

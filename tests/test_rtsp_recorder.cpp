@@ -5,6 +5,8 @@
 #include <cassert>
 #include <chrono>
 #include <cstdio>
+#include <cstdint>
+#include <vector>
 
 using namespace orbvi::camera;
 using Clock = std::chrono::steady_clock;
@@ -12,11 +14,17 @@ namespace {
 int marker;
 int starts = 0, stops = 0, inputs = 0;
 bool never_register = false;
+bool fail_input = false;
+std::vector<std::vector<uint8_t>> created_frames;
+std::vector<uint64_t> created_pts;
 Clock::time_point registered_at;
 template <typename T> T handle() { return reinterpret_cast<T>(&marker); }
 void reset(bool fail = false) {
     starts = stops = inputs = 0;
     never_register = fail;
+    fail_input = false;
+    created_frames.clear();
+    created_pts.clear();
     registered_at = Clock::now();
 }
 }
@@ -35,12 +43,17 @@ mk_track mk_track_create(int, codec_args *) { return handle<mk_track>(); }
 void mk_track_unref(mk_track) {}
 void mk_media_init_track(mk_media, mk_track) {}
 void mk_media_init_complete(mk_media) {}
-mk_frame mk_frame_create(int, uint64_t, uint64_t, const char *, size_t,
-                         on_mk_frame_data_release, void *) { return handle<mk_frame>(); }
+mk_frame mk_frame_create(int, uint64_t, uint64_t pts, const char *data, size_t size,
+                         on_mk_frame_data_release, void *) {
+    const auto *bytes = reinterpret_cast<const uint8_t *>(data);
+    created_frames.emplace_back(bytes, bytes + size);
+    created_pts.push_back(pts);
+    return handle<mk_frame>();
+}
 void mk_frame_unref(mk_frame) {}
 int mk_media_input_frame(mk_media, mk_frame) {
     if (++inputs == 1) registered_at = Clock::now() + std::chrono::milliseconds(25);
-    return 1;
+    return fail_input ? 0 : 1;
 }
 int mk_recorder_start(int type, const char *, const char *, const char *, const char *, size_t) {
     assert(type == 1);
@@ -99,6 +112,22 @@ int main() {
         assert(server.open() == 0);
         assert(server.push(frame, sizeof(frame), 123) == -1);
         assert(inputs == 0 && starts == 0 && stops == 0);
+        assert(server.close() == 0);
+    }
+    reset();
+    {
+        RtspServer server(558, "/live/PRR", Codec::H264);
+        assert(server.open() == 0);
+        const FrameMetadata metadata{2, 42, 123456789};
+        assert(server.push(frame, sizeof(frame), metadata.timestamp_ns, &metadata) == 0);
+        assert(inputs == 2 && created_frames.size() == 2);
+        assert(created_frames[0] == frame_metadata_sei(metadata));
+        assert(created_pts[0] == 123 && created_pts[1] == 123);
+        assert(server.push(frame, sizeof(frame), metadata.timestamp_ns + 1, &metadata) == -1);
+        assert(inputs == 2);
+        fail_input = true;
+        assert(server.push(frame, sizeof(frame), metadata.timestamp_ns, &metadata) == -1);
+        assert(inputs == 3);
         assert(server.close() == 0);
     }
     std::puts("RTSP recorder race tests passed");

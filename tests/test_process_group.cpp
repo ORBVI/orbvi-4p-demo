@@ -44,5 +44,29 @@ int main() {
     if (!caught_up) orbvi::camera::stop_group(group); // Release worker before failing.
     late_worker.join();
     assert(caught_up && decision_future.get() == orbvi::camera::GroupDecision::Accept);
+    std::array<bool, 4> started{};
+    for (unsigned camera = 0; camera < 4; ++camera) {
+        workers[camera] = std::thread([&, camera] {
+            started[camera] = orbvi::camera::wait_for_start(group, camera);
+        });
+    }
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (!orbvi::camera::all_cameras_ready(group) && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::yield();
+    assert(orbvi::camera::all_cameras_ready(group));
+    orbvi::camera::release_start(group);
+    for (auto &worker : workers) worker.join();
+    for (bool ready : started) assert(ready);
+    orbvi::camera::destroy_group(group);
+    assert(orbvi::camera::initialize_group(group, 1, 1000) == 0);
+    bool stopped_start = true;
+    std::thread stopped_worker([&] { stopped_start = orbvi::camera::wait_for_start(group, 0); });
+    const auto stop_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    while (!orbvi::camera::all_cameras_ready(group) && std::chrono::steady_clock::now() < stop_deadline)
+        std::this_thread::yield();
+    assert(orbvi::camera::all_cameras_ready(group));
+    orbvi::camera::stop_group(group);
+    stopped_worker.join();
+    assert(!stopped_start && !orbvi::camera::all_cameras_ready(group));
     orbvi::camera::destroy_group(group);
 }

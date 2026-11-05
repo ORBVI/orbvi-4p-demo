@@ -24,6 +24,8 @@ $cxx $flags -Iapps/imu tests/test_imu_wire.cpp apps/imu/imu_wire.cpp -o .build/t
 .build/test-imu-wire
 $cxx $flags -Iapps/sensor -Iapps/camera tests/test_sensor_options.cpp apps/sensor/sensor_options.cpp apps/camera/camera_options.cpp -o .build/test-sensor-options
 .build/test-sensor-options
+$cxx $flags -Iapps/sensor -Iapps/camera tests/test_sensor_external_options.cpp apps/sensor/sensor_options.cpp apps/camera/camera_options.cpp -o .build/test-sensor-external-options
+.build/test-sensor-external-options
 $cxx $flags -Iapps/camera tests/test_camera_demo.cpp apps/camera/camera_options.cpp -o .build/test-camera-demo
 .build/test-camera-demo
 $cxx $flags -Iapps/camera tests/test_nv12_copy.cpp apps/camera/nv12_copy.cpp -o .build/test-nv12-copy
@@ -36,6 +38,8 @@ $cxx $flags -Iapps/camera tests/test_mosaic_options.cpp apps/camera/mosaic_optio
 .build/test-mosaic-options
 $cxx $flags -Iapps/camera tests/test_process_group.cpp apps/camera/process_group.cpp -pthread -o .build/test-process-group
 .build/test-process-group
+$cxx $flags -Iapps/camera tests/test_frame_metadata.cpp -o .build/test-frame-metadata
+.build/test-frame-metadata
 
 # Camera-only regression: fake media-kit registration/MP4 startup.
 $cxx $flags -Iapps/camera -Itests/stubs tests/test_rtsp_recorder.cpp apps/camera/rtsp_server.cpp -pthread -o .build/test-rtsp-recorder

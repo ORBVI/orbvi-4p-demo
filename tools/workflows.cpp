@@ -2,6 +2,7 @@
 #include "../src/sensor_timing.hpp"
 #include <algorithm>
 #include <atomic>
+#include <charconv>
 #include <fcntl.h>
 #include <iostream>
 #include <thread>
@@ -104,9 +105,42 @@ void wait_ready(Process &child,const fs::path &log,int seconds,const std::functi
         require(now_ns()<deadline,"Capture readiness timeout"); tick();
     }
 }
-Phase acquire_phase(const std::string &name,int64_t duration,Iio &imu,Process *child=nullptr,Gpio *gpio=nullptr,unsigned hz=0) {
+// Progress reads only complete, flushed CSV rows. Final acceptance always
+// re-reads all records after capture has stopped and applies analyze_phase.
+void report_sync_progress(const Phase &p,const Iio &imu,const fs::path &capture,bool phase_end=false) {
+    std::cout << "SYNC phase=" << p.name << " elapsed_s=" << std::max<int64_t>(0,(now_ns()-p.start)/1000000000)
+              << (phase_end ? " phase_end" : " running") << " camera_frames=[";
+    for(unsigned camera=0;camera<4;++camera) {
+        std::ifstream input(capture/("camera"+std::to_string(camera)+".csv"));
+        std::string line; size_t count=0;
+        std::getline(input,line);
+        while(std::getline(input,line) && !input.eof()) {
+            auto first=line.find(',');
+            auto second=first==std::string::npos ? first : line.find(',',first+1);
+            auto third=second==std::string::npos ? second : line.find(',',second+1);
+            if(third==std::string::npos) continue;
+            int64_t timestamp=0;
+            auto parsed=std::from_chars(line.data()+second+1,line.data()+third,timestamp);
+            if(parsed.ec==std::errc{} && parsed.ptr==line.data()+third && timestamp>=p.start) ++count;
+        }
+        if(camera) std::cout << ',';
+        std::cout << count;
+    }
+    std::cout << ']';
+    for(const auto &device:imu.devices) {
+        size_t samples=0,events=0;
+        for(const auto &row:device.rows) {
+            samples+=row.at("in_timestamp")>=p.start;
+            events+=row.at("in_count0_fsync_event") && row.at("in_count5_fsync_timestamp_ns")>=p.start;
+        }
+        std::cout << " " << device.id << "_samples=" << samples << " fsync_events=" << events;
+    }
+    std::cout << std::endl;
+}
+Phase acquire_phase(const std::string &name,int64_t duration,Iio &imu,Process *child=nullptr,Gpio *gpio=nullptr,unsigned hz=0,const fs::path &capture={}) {
     Phase p; p.name=name; p.start=now_ns()+(hz ? 100000000 : 0);
-    int64_t end=p.start+duration, report=p.start+10000000000LL;
+    const int64_t interval=capture.empty() ? 10000000000LL : 1000000000LL;
+    int64_t end=p.start+duration, report=p.start+interval;
     std::unique_ptr<Trigger> trigger;
     if(hz) trigger=std::make_unique<Trigger>(*gpio,p.start,unsigned(duration/1000000000),hz);
     while(now_ns()<end) {
@@ -114,12 +148,17 @@ Phase acquire_phase(const std::string &name,int64_t duration,Iio &imu,Process *c
         if(child) require(child->poll()==-1,"Capture exited early; see capture.log");
         if(trigger) trigger->check();
         imu.drain(1);
-        if(now_ns()>=report) {std::cout << name << " progress " << (now_ns()-p.start)/1000000000 << " seconds" << std::endl; report+=10000000000LL;}
+        if(now_ns()>=report) {
+            if(!capture.empty()) report_sync_progress(p,imu,capture);
+            else std::cout << name << " progress " << (now_ns()-p.start)/1000000000 << " seconds" << std::endl;
+            report+=interval;
+        }
     }
     if(trigger) {
         p.pulses=trigger->finish(); require(p.pulses.size()==size_t(duration/1000000000)*hz,"Trigger count mismatch");
     }
     p.end=now_ns();
+    if(!capture.empty()) report_sync_progress(p,imu,capture,true);
     std::cout << name << " pulses " << p.pulses.size() << std::endl; return p;
 }
 }
@@ -219,7 +258,9 @@ int run_sync(const std::string &runner,bool raw,unsigned seconds,const fs::path 
     Json result; result["raw_saved"]=raw;
     std::string error; std::vector<std::string> errors;
     try {
-        imu.open(); gpio.open();
+        imu.open();
+        std::cout << "IMU configuration: "; imu.configuration.write(std::cout); std::cout << std::endl;
+        gpio.open();
         std::vector<std::string> args{runner,"--mode","external","--frames","1000000","--timeout-ms","60000","--output",(root/"capture").string()};
         if(!raw) args.push_back("--discard");
         child.start(args,root/"capture.log");
@@ -227,13 +268,13 @@ int run_sync(const std::string &runner,bool raw,unsigned seconds,const fs::path 
             gpio.pulse(); auto until=now_ns()+50000000;
             while(now_ns()<until) imu.drain(1);
         });
-        phases.push_back(acquire_phase("settle",1000000000,imu,&child));
+        phases.push_back(acquire_phase("settle",1000000000,imu,&child,nullptr,0,root/"capture"));
         before=snapshot(imu);
-        phases.push_back(acquire_phase("quiet_before",2000000000,imu,&child));
-        phases.push_back(acquire_phase(raw ? "trigger_2hz" : "trigger_15hz",3000000000,imu,&child,&gpio,raw ? 2 : 15));
-        phases.push_back(acquire_phase("quiet_middle",2000000000,imu,&child));
-        phases.push_back(acquire_phase("trigger_30hz",int64_t(raw ? 1 : seconds)*1000000000,imu,&child,&gpio,30));
-        phases.push_back(acquire_phase("quiet_after",2000000000,imu,&child));
+        phases.push_back(acquire_phase("quiet_before",2000000000,imu,&child,nullptr,0,root/"capture"));
+        phases.push_back(acquire_phase(raw ? "trigger_2hz" : "trigger_15hz",3000000000,imu,&child,&gpio,raw ? 2 : 15,root/"capture"));
+        phases.push_back(acquire_phase("quiet_middle",2000000000,imu,&child,nullptr,0,root/"capture"));
+        phases.push_back(acquire_phase("trigger_30hz",int64_t(raw ? 1 : seconds)*1000000000,imu,&child,&gpio,30,root/"capture"));
+        phases.push_back(acquire_phase("quiet_after",2000000000,imu,&child,nullptr,0,root/"capture"));
         stop_capture([&]{child.signal(SIGINT);},[&]{return child.poll();},[&]{imu.drain(5);},
                      [&]{imu.disable();},[&]{after=snapshot(imu);});
         imu.drain(0);

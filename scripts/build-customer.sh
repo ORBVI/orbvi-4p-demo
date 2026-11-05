@@ -31,4 +31,5 @@ fi
 
 make CXX="$CXX" HBN_ROOT="$HBN_ROOT" all
 HBN_ROOT="$HBN_ROOT" RTSP_ROOT="$RTSP_ROOT" HBN_SYS_LIB="$HBN_SYS_LIB" CXX="$CXX" sh apps/build.sh
+(cd dist && sha256sum orbvi-4p-demo orbvi-verify run.sh >> manifest.sha256)
 printf 'Built board binaries in %s/dist/\n' "$project"
